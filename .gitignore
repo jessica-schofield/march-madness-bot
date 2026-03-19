@@ -15,3 +15,6 @@ __pycache__/
 # Environment variables
 .env
 cbs_cookies.json
+
+# Config File
+config.json

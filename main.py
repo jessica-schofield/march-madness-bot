@@ -1,36 +1,40 @@
+#!/usr/bin/env python3
+# ------------------------------
+# MARCH MADNESS SLACK BOT
+# ------------------------------
+
 import requests
 import json
 import datetime
 import time
-import random
 from pathlib import Path
+from slack_sdk import WebClient
+from yearly_setup_reminder import yearly_reminder, load_flag
+import slack_setup
+import asyncio
+from playwright.async_api import async_playwright
 
 # ------------------------------
-# Load config
+# Config & paths
 # ------------------------------
 CONFIG_FILE = Path("config.json")
-if not CONFIG_FILE.exists():
-    raise FileNotFoundError("config.json not found! Please create it.")
-
-with open(CONFIG_FILE) as f:
-    config = json.load(f)
-
-MEN_URL = config.get("men_bracket_url")
-WOMEN_URL = config.get("women_bracket_url")
-SLACK_WEBHOOK = config.get("slack_webhook_url")
-MOCK = config.get("mock_slack", True)
-TEST_DAILY_SUMMARY = config.get("test_daily_summary", False)
-
-# ------------------------------
-# State files
-# ------------------------------
 SEEN_FILE = Path("seen_games.json")
 LAST_POST_FILE = Path("last_post.json")
 LAST_RANKINGS_FILE = Path("last_rankings.json")
 
 # ------------------------------
-# Helpers for state management
+# Helper functions
 # ------------------------------
+def get_input(prompt, default=None, required=False):
+    while True:
+        val = input(f"{prompt} " + (f"[Default: {default}]: " if default else ": "))
+        if not val and default is not None:
+            return default
+        if val:
+            return val
+        if required:
+            print("This field is required. Please enter a value.")
+
 def load_json(path, default):
     if path.exists():
         try:
@@ -41,22 +45,70 @@ def load_json(path, default):
 
 def save_json(path, data):
     with path.open("w") as f:
-        json.dump(data, f)
-
-seen = set(load_json(SEEN_FILE, []))
-last_post = load_json(LAST_POST_FILE, {"timestamp": 0, "daily_summary_date": None})
+        json.dump(data, f, indent=2)
 
 # ------------------------------
-# Slack helper
+# CBS / Playwright helpers (async)
 # ------------------------------
-def post_message(text):
-    if MOCK:
-        print(f"[SLACK MOCK] {text}\n{'-'*50}")
-    else:
-        requests.post(SLACK_WEBHOOK, json={"text": text})
+PLAYWRIGHT_STATE = Path("playwright_state.json")
+PLAYWRIGHT_HEADLESS = True
+
+def playwright_state_empty(path):
+    return not path.exists() or path.stat().st_size == 0
+
+async def ensure_logged_in_async(cbs_url):
+    if PLAYWRIGHT_STATE.exists():
+        print("[INFO] Existing Playwright session found.")
+        return
+    print("[SETUP REQUIRED] No CBS login session found. Browser will open for interactive login.\n")
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(headless=False)
+        context = await browser.new_context()
+        page = await context.new_page()
+        await page.goto(cbs_url)
+        print("[ACTION] Please log in to CBS manually in the browser window.")
+        await page.wait_for_selector("table", timeout=300_000)
+        await context.storage_state(path=str(PLAYWRIGHT_STATE))
+        await browser.close()
+    print("[INFO] CBS login session saved!\n")
+
+async def get_top_n_async(cbs_url, n=3):
+    top_list = []
+    if playwright_state_empty(PLAYWRIGHT_STATE):
+        await ensure_logged_in_async(cbs_url)
+
+    try:
+        async with async_playwright() as p:
+            browser = await p.chromium.launch(headless=PLAYWRIGHT_HEADLESS)
+            context = await browser.new_context(storage_state=str(PLAYWRIGHT_STATE))
+            page = await context.new_page()
+            await page.goto(cbs_url, wait_until="domcontentloaded", timeout=30_000)
+            await page.wait_for_selector("table", timeout=15_000)
+            tables = await page.query_selector_all("table")
+            if len(tables) < 2:
+                print("[WARN] Leaderboard table not found, retrying login...")
+                await browser.close()
+                if PLAYWRIGHT_STATE.exists(): PLAYWRIGHT_STATE.unlink()
+                return await get_top_n_async(cbs_url, n)
+            leaderboard_table = tables[1]
+            rows = await leaderboard_table.query_selector_all("tr")
+            for row in rows[1:n+1]:
+                cells = await row.query_selector_all("td")
+                if len(cells) >= 4:
+                    name = (await cells[2].inner_text()).strip()
+                    points = (await cells[3].inner_text()).strip()
+                    top_list.append(f"{name} ({points})")
+            await browser.close()
+    except Exception as e:
+        print(f"[ERROR] Failed to scrape CBS top {n}: {e}")
+    return top_list
+
+# Sync wrapper
+def get_top_n(cbs_url, n=3):
+    return asyncio.run(get_top_n_async(cbs_url, n))
 
 # ------------------------------
-# Seed extraction helper
+# CBS data parsing
 # ------------------------------
 def extract_seed(team):
     rank = team.get("curatedRank", 0)
@@ -67,209 +119,229 @@ def extract_seed(team):
     except:
         return 0
 
-# ------------------------------
-# Generic bracket scraper
-# ------------------------------
 def get_final_games(url, gender):
-    if not url:
-        return []
+    if not url: return []
     try:
         data = requests.get(url).json()
     except:
         return []
-
-    games = data.get("events", [])
-    finals = []
-
-    for game in games:
+    games = []
+    for game in data.get("events", []):
         try:
-            competition = game["competitions"][0]
-            status = competition["status"]["type"]["name"]
-            game_id = game["id"]
-
-            if status != "STATUS_FINAL":
-                continue
-
-            teams = competition["competitors"]
-            home = next(t for t in teams if t["homeAway"] == "home")
-            away = next(t for t in teams if t["homeAway"] == "away")
-
-            finals.append({
-                "id": game_id,
+            comp = game["competitions"][0]
+            if comp["status"]["type"]["name"] != "STATUS_FINAL": continue
+            teams = {t["homeAway"]: t for t in comp["competitors"]}
+            games.append({
+                "id": game["id"],
                 "gender": gender,
-                "home": home["team"]["displayName"],
-                "home_score": home["score"],
-                "home_seed": extract_seed(home),
-                "away": away["team"]["displayName"],
-                "away_score": away["score"],
-                "away_seed": extract_seed(away),
+                "home": teams["home"]["team"]["displayName"],
+                "home_score": teams["home"]["score"],
+                "home_seed": extract_seed(teams["home"]),
+                "away": teams["away"]["team"]["displayName"],
+                "away_score": teams["away"]["score"],
+                "away_seed": extract_seed(teams["away"]),
                 "date": game.get("date")
             })
         except:
             continue
-    return finals
+    return games
 
 # ------------------------------
-# Slack message builders
+# Build daily summary
 # ------------------------------
-def build_slack_message(game, top_three_men, top_three_women):
-    home_score = int(game['home_score'])
-    away_score = int(game['away_score'])
-    home_seed = game.get('home_seed', 0)
-    away_seed = game.get('away_seed', 0)
+def build_daily_summary(men_games, women_games, top_men, top_women):
+    last_rankings = load_json(LAST_RANKINGS_FILE, {"men":[], "women":[]})
 
-    upset_emoji = ""
-    if (home_score > away_score and home_seed > away_seed) or \
-       (away_score > home_score and away_seed > home_seed):
-        upset_emoji = "⚡🔥"
+    def calculate_movers(new, old):
+        old_positions = {name.split(" (")[0]: idx for idx, name in enumerate(old)}
+        movers = []
+        for idx, entry in enumerate(new):
+            name = entry.split(" (")[0]
+            old_idx = old_positions.get(name, idx)
+            change = old_idx - idx
+            movers.append((name, change))
+        gained = sorted([m for m in movers if m[1] > 0], key=lambda x: -x[1])
+        lost = sorted([m for m in movers if m[1] < 0], key=lambda x: x[1])
+        return gained, lost
 
-    bracket_emoji = "🏆" if game['gender'] == 'men' else "👑"
+    men_gained, men_lost = calculate_movers(top_men, last_rankings.get("men", []))
+    women_gained, women_lost = calculate_movers(top_women, last_rankings.get("women", []))
 
-    message = (
-        f"{bracket_emoji} {upset_emoji} FINAL: {game['away']} {away_score} - {home_score} {game['home']} {upset_emoji}\n\n"
-        f"📊 *Men’s Top 3:* \n" + "\n".join(f"{i+1}. {entry}" for i, entry in enumerate(top_three_men)) + "\n\n"
-        f"👩‍🦰 *Women’s Top 3:* \n" + "\n".join(f"{i+1}. {entry}" for i, entry in enumerate(top_three_women))
+    blocks = slack_setup.build_daily_summary_blocks(
+        men_games, women_games, top_men, top_women,
+        extra_summary={
+            "men_gained": men_gained[:3],
+            "men_lost": men_lost[:3],
+            "women_gained": women_gained[:3],
+            "women_lost": women_lost[:3],
+        }
     )
-    return message
 
-def build_daily_summary(men_games, women_games, top_three_men, top_three_women):
-    today_str = datetime.date.today().strftime("%B %d")
-    last_rankings = load_json(LAST_RANKINGS_FILE, {})
-    last_men = last_rankings.get("men", [])
-    last_women = last_rankings.get("women", [])
+    save_json(LAST_RANKINGS_FILE, {"men": top_men, "women": top_women})
+    return blocks
 
-    intros = [
-        "☀️ Good morning! Here’s the madness from yesterday:",
-        "🎉 Daily chaos report incoming!",
-        "😂 Buckle up: yesterday in March Madness...",
-        "☕ Grab your coffee, here’s what happened on the court yesterday:",
-        "🏀 Another day, another bracket disaster report:"
-    ]
-    intro = random.choice(intros)
-    summary = f"{intro}\n\n"
+# ------------------------------
+# Post message
+# ------------------------------
+def post_message(text=None, blocks=None):
+    today = datetime.datetime.now().weekday()
+    if not config.get("POST_ON_WEEKENDS", True) and today >= 5:
+        print("[INFO] Skipping posting today — weekend posting disabled")
+        return
 
-    if men_games:
-        summary += "🏀 *Men’s Games:* \n"
-        for g in men_games:
-            summary += f"- {g['away']} {g['away_score']} - {g['home_score']} {g['home']}\n"
+    if MOCK:
+        print("[SLACK MOCK]")
+        if blocks:
+            for b in blocks: print(b)
+        elif text:
+            print(text)
+        print("-"*50)
     else:
-        summary += "🏀 No men’s games yesterday. 😴\n"
+        payload = {"text": text} if text else {}
+        if blocks: payload["blocks"] = blocks
+        requests.post(SLACK_WEBHOOK, json=payload)
 
-    if women_games:
-        summary += "\n👑 *Women’s Games:* \n"
-        for g in women_games:
-            summary += f"- {g['away']} {g['away_score']} - {g['home_score']} {g['home']}\n"
+# ------------------------------
+# Setup flow (CLI vs Slack)
+# ------------------------------
+def first_time_setup_prompt():
+    choice = get_input("Do you want to configure via Slack or Command Line? (slack/cli)", default="cli").lower()
+    return choice
+
+def run_first_time_setup():
+    config={} if not CONFIG_FILE.exists() else load_json(CONFIG_FILE,{})
+    choice = first_time_setup_prompt()
+    if choice=="cli":
+        config = command_line_setup(config)
+        config = slack_setup_flow(config)
     else:
-        summary += "\n👩‍🦰 No women’s games yesterday. 🤫\n"
+        config = slack_setup_flow(config)
+        config = command_line_setup(config)
+    return config
 
-    # Fixed quip function
-    def make_funny_rankings(top_list, last_list):
-        lines = []
-        for i, entry in enumerate(top_list):
-            if entry in last_list:
-                move = last_list.index(entry) - i
-                if move > 0:
-                    poke = f"⬆️ +{move} Gaining on everyone!"
-                elif move < 0:
-                    poke = f"⬇️ {abs(move)} Ouch, dropping spots!"
-                else:
-                    poke = "✅ Holding steady at this spot!"
-            else:
-                poke = "✨ New entrant to top 3!"
-            lines.append(f"{i+1}. {entry} — {poke}")
-        return lines
+def command_line_setup(config):
+    global PLAYWRIGHT_HEADLESS, PLAYWRIGHT_STATE
+    print("\n=== COMMAND LINE SETUP ===\n")
 
-    summary += "\n📊 *Men’s Top 3:* \n" + "\n".join(make_funny_rankings(top_three_men, last_men))
-    summary += "\n\n👩‍🦰 *Women’s Top 3:* \n" + "\n".join(make_funny_rankings(top_three_women, last_women))
-    summary += "\n\n😂 Remember: brackets are like office politics — unpredictable, dramatic, and slightly embarrassing!"
+    config["TOP_N"] = int(get_input("Top users to brag about each day?", default=str(config.get("TOP_N",3))))
+    config["MINUTES_BETWEEN_MESSAGES"] = int(get_input("Minutes between automated messages?", default=str(config.get("MINUTES_BETWEEN_MESSAGES",30))))
+    config["PLAYWRIGHT_HEADLESS"] = config.get("PLAYWRIGHT_HEADLESS", True)
+    config["PLAYWRIGHT_STATE"] = config.get("PLAYWRIGHT_STATE", "playwright_state.json")
+    PLAYWRIGHT_HEADLESS = config["PLAYWRIGHT_HEADLESS"]
+    PLAYWRIGHT_STATE = Path(config["PLAYWRIGHT_STATE"])
 
-    # Save current top rankings for next comparison
-    save_json(LAST_RANKINGS_FILE, {"men": top_three_men, "women": top_three_women})
+    config["POST_ON_WEEKENDS"] = get_input(
+        "Post game updates and daily summaries on weekends? (YES/NO)", default="YES"
+    ).strip().upper() == "YES"
 
-    return summary
+    men_url = get_input("CBS Men’s Pool URL (blank if none)", default=config.get("POOLS",[{}])[0].get("MEN_URL",""))
+    women_url = get_input("CBS Women’s Pool URL (blank if none)", default=config.get("POOLS",[{}])[0].get("WOMEN_URL",""))
+
+    config["POOLS"] = []
+    if men_url or women_url:
+        pool = {"NAME":"Main CBS Pool","SOURCE":"cbs"}
+        if men_url: pool["MEN_URL"] = men_url
+        if women_url: pool["WOMEN_URL"] = women_url
+        config["POOLS"].append(pool)
+
+    # Scrape top N users for each pool and gender
+    config["MANUAL_TOP"] = []
+    for pool in config.get("POOLS", []):
+        for gender_key in ["MEN_URL","WOMEN_URL"]:
+            url = pool.get(gender_key)
+            if url:
+                config["MANUAL_TOP"] += get_top_n(url, config["TOP_N"])
+
+    # Fallback test users
+    while len(config["MANUAL_TOP"]) < config["TOP_N"]*2:
+        i = len(config["MANUAL_TOP"])
+        config["MANUAL_TOP"].append(f"TestUser{i+1} ({100-i})")
+
+    config["SLACK_WEBHOOK_URL"] = config.get("SLACK_WEBHOOK_URL","")
+    config["SLACK_MANAGER_ID"] = config.get("SLACK_MANAGER_ID","")
+    config["MOCK_SLACK"] = True if not config["SLACK_WEBHOOK_URL"] else False
+
+    save_json(CONFIG_FILE, config)
+
+    run_sim = get_input("Run full test simulation now? (YES/NO)", default="YES").strip().upper()
+    if run_sim == "YES":
+        global MOCK
+        MOCK = True
+        run_quick_test(config)
+
+    return config
+
+def slack_setup_flow(config):
+    choice=get_input("Configure Slack now? (YES/NO)", default="YES").strip().upper()
+    if choice!="YES": return config
+    slack_id=get_input("Enter your Slack ID for DM fallback", required=True)
+    config["SLACK_MANAGER_ID"]=slack_id
+    config["MOCK_SLACK"]=False if config.get("SLACK_WEBHOOK_URL") else True
+    slack_setup.run_setup(WebClient(token="SIMULATE_TOKEN"), slack_id)
+    save_json(CONFIG_FILE, config)
+    return config
 
 # ------------------------------
-# Tournament finished check
+# QUICK TEST RUN
 # ------------------------------
-def tournament_finished(men_games, women_games):
-    return len(men_games) == 0 and len(women_games) == 0
+def run_quick_test(config):
+    men_games = get_final_games(config.get("POOLS",[{}])[0].get("MEN_URL",""), "men") or [{
+        "id":"MEN_TEST_001","gender":"men","home":"Duke","home_score":82,"home_seed":2,"away":"UNC","away_score":78,"away_seed":7}]
+    women_games = get_final_games(config.get("POOLS",[{}])[0].get("WOMEN_URL",""), "women") or [{
+        "id":"WOMEN_TEST_001","gender":"women","home":"UConn","home_score":75,"home_seed":1,"away":"Stanford","away_score":70,"away_seed":4}]
+
+    top_n = config.get("TOP_N",3)
+    top_men = config.get("MANUAL_TOP",[])[:top_n]
+    top_women = config.get("MANUAL_TOP",[])[top_n:top_n*2]
+
+    print("\n[TEST] Men’s game message:")
+    for b in slack_setup.build_slack_message(men_games[0], top_men, top_women):
+        print(b)
+
+    print("\n[TEST] Women’s game message:")
+    for b in slack_setup.build_slack_message(women_games[0], top_men, top_women):
+        print(b)
+
+    print("\n[TEST] Daily summary with movers:")
+    for b in build_daily_summary(men_games, women_games, top_men, top_women):
+        print(b)
+
+    print("\n=== END TEST SIMULATION ===\n")
 
 # ------------------------------
-# MAIN
+# MAIN EXECUTION
 # ------------------------------
-if __name__ == "__main__":
+if __name__=="__main__":
     print("[INFO] March Madness Bot starting...")
+    REQUIRED_KEYS={"TOP_N":3,"MINUTES_BETWEEN_MESSAGES":30,"PLAYWRIGHT_HEADLESS":True,
+                   "PLAYWRIGHT_STATE":"playwright_state.json","POOLS":[],"SLACK_WEBHOOK_URL":"",
+                   "SLACK_MANAGER_ID":""}
+
+    def needs_setup(cfg): return any(k not in cfg or cfg[k] in (None,"",[]) for k in REQUIRED_KEYS)
+
+    config={} if not CONFIG_FILE.exists() else load_json(CONFIG_FILE,{})
+    if not CONFIG_FILE.exists() or needs_setup(config):
+        config=run_first_time_setup()
+
+    cbs_pool=next((p for p in config.get("POOLS",[]) if p.get("SOURCE")=="cbs"),None)
+    MEN_URL=cbs_pool.get("MEN_URL") if cbs_pool else None
+    WOMEN_URL=cbs_pool.get("WOMEN_URL") if cbs_pool else None
+    SLACK_WEBHOOK=config.get("SLACK_WEBHOOK_URL")
+    MOCK=config.get("MOCK_SLACK",True)
+    MINUTES_BETWEEN_MESSAGES=config.get("MINUTES_BETWEEN_MESSAGES",30)
+    TOP_N=config.get("TOP_N",3)
+    PLAYWRIGHT_HEADLESS=config.get("PLAYWRIGHT_HEADLESS",True)
+    PLAYWRIGHT_STATE=Path(config.get("PLAYWRIGHT_STATE","playwright_state.json"))
+    MANAGER_ID=config.get("SLACK_MANAGER_ID")
+    seen=set(load_json(SEEN_FILE,[]))
+    last_post=load_json(LAST_POST_FILE,{"timestamp":0,"daily_summary_date":None})
+
+    if MANAGER_ID: yearly_reminder(WebClient(token="SIMULATE_TOKEN"),MANAGER_ID)
+    yearly_flag=load_flag()
+    LIVE_FOR_YEAR=yearly_flag.get("LIVE_FOR_YEAR",False)
+    if not LIVE_FOR_YEAR:
+        print("[INFO] Bot not live yet — forcing TEST MODE.\n")
+        MOCK=True
     if MOCK:
         print("[INFO] MOCK SLACK mode active — messages will be printed only.\n" + "-"*50)
-
-    now_ts = time.time()
-    men_games_today = get_final_games(MEN_URL, 'men')
-    women_games_today = get_final_games(WOMEN_URL, 'women')
-
-    # Placeholder top 3
-    men_top_three = ["Alice", "Bob", "Charlie"] if MEN_URL else []
-    women_top_three = ["Dana", "Eve", "Faith"] if WOMEN_URL else []
-
-    all_games = men_games_today + women_games_today
-
-    # -------------------
-    # Post finished games (30 min rate limit)
-    # -------------------
-    if now_ts - last_post.get("timestamp", 0) > 30*60:
-        for g in all_games:
-            if g["id"] in seen:
-                continue
-            message = build_slack_message(g, men_top_three, women_top_three)
-            post_message(message)
-            seen.add(g["id"])
-        last_post["timestamp"] = now_ts
-
-    # -------------------
-    # Daily summary (8AM or test mode)
-    # -------------------
-    today = datetime.date.today()
-    should_post_daily = False
-
-    # Normal daily summary check (after 8AM)
-    if datetime.datetime.now().hour >= 8 and last_post.get("daily_summary_date") != str(today):
-        should_post_daily = True
-
-    # Force test summary if test flag is on
-    if TEST_DAILY_SUMMARY:
-        should_post_daily = True  # ✅ force it
-        config["test_daily_summary"] = False  # reset the flag so it doesn't repeat
-        with open(CONFIG_FILE, "w") as f:
-            json.dump(config, f, indent=2)
-        print("[INFO] TEST DAILY SUMMARY triggered!")  # Add this line so you see it
-
-    if datetime.datetime.now().hour >= 8 and last_post.get("daily_summary_date") != str(today):
-        should_post_daily = True
-
-    if TEST_DAILY_SUMMARY:
-        should_post_daily = True
-        config["test_daily_summary"] = False
-        with open(CONFIG_FILE, "w") as f:
-            json.dump(config, f, indent=2)
-
-    if should_post_daily:
-        daily_message = build_daily_summary(men_games_today, women_games_today, men_top_three, women_top_three)
-        post_message(daily_message)
-        last_post["daily_summary_date"] = str(today)
-
-    # -------------------
-    # Final tournament update
-    # -------------------
-    if tournament_finished(men_games_today, women_games_today) and "final_update_posted" not in seen:
-        final_message = "🏆🎉 THE TOURNAMENT IS OVER! 🎉🏆\n\n"
-        if men_top_three:
-            final_message += "📊 *Final Men’s Top 3:* \n" + "\n".join(f"{i+1}. {entry}" for i, entry in enumerate(men_top_three)) + "\n\n"
-        if women_top_three:
-            final_message += "👩‍🦰 *Final Women’s Top 3:* \n" + "\n".join(f"{i+1}. {entry}" for i, entry in enumerate(women_top_three))
-        post_message(final_message)
-        seen.add("final_update_posted")
-
-    # -------------------
-    # Save state
-    # -------------------
-    save_json(SEEN_FILE, list(seen))
-    save_json(LAST_POST_FILE, last_post)
+        run_quick_test(config)
