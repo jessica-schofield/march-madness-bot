@@ -1,0 +1,17 @@
+# Ignore virtual environment
+venv/
+
+# Ignore temporary bot files
+cron.log
+last_post.json
+last_rankings.json
+seen_games.json
+playwright_state.json
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Environment variables
+.env
+cbs_cookies.json
