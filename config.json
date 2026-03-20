@@ -1,7 +1,7 @@
 {
-  "men_bracket_url": "https://picks.cbssports.com/college-basketball/ncaa-tournament/bracket/pools/kbxw63b2ge3deojqg4ydq===/standings",
-  "women_bracket_url": "hhttps://picks.cbssports.com/college-basketball/ncaaw-tournament/bracket/pools/kbxw63b2ge3deojqhazts===/standings",
-  "slack_webhook_url": "https://hooks.slack.com/services/YOUR/WEBHOOK/URL",
-  "mock_slack": true,
-  "test_daily_summary": false
+  "SLACK_WEBHOOK_URL": "YOUR_SLACK_WEBHOOK_URL_HERE",
+  "CBS_MEN_BRACKET_URL": "YOUR_MEN_BRACKET_URL_HERE",
+  "CBS_WOMEN_BRACKET_URL": "YOUR_WOMEN_BRACKET_URL_HERE",
+  "MOCK_SLACK": true,
+  "TEST_DAILY_SUMMARY": false
 }
