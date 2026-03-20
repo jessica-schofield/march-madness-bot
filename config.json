@@ -1,7 +1,23 @@
 {
-  "SLACK_WEBHOOK_URL": "YOUR_SLACK_WEBHOOK_URL_HERE",
-  "CBS_MEN_BRACKET_URL": "YOUR_MEN_BRACKET_URL_HERE",
-  "CBS_WOMEN_BRACKET_URL": "YOUR_WOMEN_BRACKET_URL_HERE",
-  "MOCK_SLACK": true,
-  "TEST_DAILY_SUMMARY": false
+  "PLAYWRIGHT_HEADLESS": true,
+  "SLACK_MANAGER_ID": "",
+  "TOP_N": 3,
+  "MINUTES_BETWEEN_MESSAGES": 30,
+  "POST_ON_WEEKENDS": false,
+  "MANUAL_TOP": [
+    "jj",
+    "mm",
+    "kk"
+  ],
+  "POOLS": [
+    {
+      "SOURCE": "cbs",
+      "MEN_URL": "https://picks.cbssports.com/college-basketball/ncaa-tournament/bracket/pools/kbxw63b2ge3deojqg4ydq===/standings",
+      "WOMEN_URL": "https://picks.cbssports.com/college-basketball/ncaaw-tournament/bracket/pools/kbxw63b2ge3deojqhazts===/standings"
+    }
+  ],
+  "SLACK_WEBHOOK_URL": "",
+  "MOCK_SLACK": false,
+  "POST_GAME_UPDATES": true,
+  "POST_DAILY_SUMMARY": true
 }
