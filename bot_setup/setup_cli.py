@@ -103,7 +103,13 @@ Leave blank if you only have one pool.
 
 def get_input_safe(prompt, default=None, config=None):
     """Prompt for input, save and exit cleanly if user types 'exit'."""
-    value = input(f"{prompt}{' [Default: ' + str(default) + ']' if default is not None else ''}: ").strip()
+    try:
+        value = input(f"{prompt}{' [Default: ' + str(default) + ']' if default is not None else ''}: ").strip()
+    except EOFError:
+        # Running non-interactively (e.g. cron) — return default silently
+        if default is not None:
+            return str(default)
+        return ""
     if value.lower() == "exit":
         print("[INFO] Exiting setup. Saving current configuration...")
         if config is not None:
@@ -161,12 +167,12 @@ def ask_slack_credentials_cli(config):
     print("\n--- Slack Setup ---")
 
     webhook = ask_with_help(
-        "🔗 Slack Webhook URL — this is where the bot will post messages.",
         SLACK_WEBHOOK_HELP,
         default=config.get("SLACK_WEBHOOK_URL", ""),
-        config=config
     )
-    config["SLACK_WEBHOOK_URL"] = webhook
+    # Only overwrite if user provided a non-empty value OR there was no existing value
+    if webhook or not config.get("SLACK_WEBHOOK_URL"):
+        config["SLACK_WEBHOOK_URL"] = webhook
 
     if not webhook:
         print("[WARN] No webhook URL set — bot will run in mock mode.")
@@ -191,11 +197,10 @@ def ask_slack_credentials_cli(config):
         print("[WARN] No bot token set — Slack DMs and reminders won't work.")
 
     manager_id = ask_with_help(
-        "👤 Slack Manager User ID — the bot will tag this person in yearly reminders.",
         SLACK_MANAGER_HELP,
         default=config.get("SLACK_MANAGER_ID", ""),
-        config=config
     )
-    config["SLACK_MANAGER_ID"] = manager_id
+    if manager_id or not config.get("SLACK_MANAGER_ID"):
+        config["SLACK_MANAGER_ID"] = manager_id
 
     return config

@@ -1,10 +1,11 @@
 import json
-import datetime
-import subprocess
 import re
+import datetime
 from pathlib import Path
 
 from bot_setup.config import YEARLY_FLAG_FILE, CONFIG_FILE
+
+ROOT = Path(__file__).parent.parent  # .../march-madness-bot
 
 FLAG_FILE = YEARLY_FLAG_FILE
 
@@ -106,11 +107,17 @@ def _update_yearly_crontab(kickoff: datetime.datetime):
         pattern = re.compile(
             r"^[^\n]*yearly_setup_cron\.py[^\n]*$", re.MULTILINE
         )
+
+        _ROOT = Path(__file__).parent.parent
+        _VENV_PYTHON = _ROOT / "venv" / "bin" / "python"
+        _CRON_SCRIPT = _ROOT / "status" / "yearly_setup_cron.py"
+        _CRON_LOG = _ROOT / "cron.log"
+
         new_entry = (
             f"0 10 {kickoff.day} {kickoff.month} * "
-            f"/Users/jess/march-madness-bot/venv/bin/python "
-            f"/Users/jess/march-madness-bot/status/yearly_setup_cron.py "
-            f">> /Users/jess/march-madness-bot/cron.log 2>&1"
+            f"{_VENV_PYTHON} "
+            f"{_CRON_SCRIPT} "
+            f">> {_CRON_LOG} 2>&1"
         )
 
         if pattern.search(existing):

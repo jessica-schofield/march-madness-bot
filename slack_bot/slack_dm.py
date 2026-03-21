@@ -205,3 +205,6 @@ yesterday = (datetime.datetime.utcnow() - datetime.timedelta(days=1)).strftime("
 # No timezone awareness — midnight EST vs UTC can be off by 5 hours
 
 NCAA_TOURNAMENT_GROUP_ID = 100  # hardcoded magic number
+
+# was: datetime.datetime.utcnow()
+now = datetime.datetime.now(datetime.timezone.utc)

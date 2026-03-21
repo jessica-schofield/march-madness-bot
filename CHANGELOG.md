@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+- Hardcoded absolute paths in `status/yearly_setup_reminder.py` lines 111–113 replaced with `Path(__file__).parent.parent`-relative paths — bot no longer breaks when run outside `/Users/jess/march-madness-bot`
+
 ## [1.1.4] - 2026-03-21
 
 ### Changed

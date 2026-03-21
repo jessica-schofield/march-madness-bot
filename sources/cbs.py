@@ -55,7 +55,7 @@ def _get_espn_cookies(playwright_state_path):
         return {}
 
 
-def _fetch_espn_group_api(group_id, cookies, challenge_id=277, limit=200):
+def _fetch_espn_group_api(group_id, cookies, challenge_id=_ESPN_CHALLENGE_ID_FALLBACK, limit=200):
     """
     Call the ESPN gambit API directly to get group standings.
     Returns raw API response dict, or None on failure.
@@ -127,8 +127,8 @@ def _detect_espn_challenge_id(url, cookies):
     except Exception as e:
         print(f"[WARN] Could not detect ESPN challenge ID: {e}")
 
-    print(f"[DEBUG] Falling back to challenge ID 277")
-    return 277
+    print(f"[DEBUG] Falling back to challenge ID {_ESPN_CHALLENGE_ID_FALLBACK}")
+    return _ESPN_CHALLENGE_ID_FALLBACK
 
 
 def _parse_espn_api_response(data, logged_in_display_name=None):
@@ -195,7 +195,7 @@ def _parse_espn_api_response(data, logged_in_display_name=None):
     return results
 
 
-async def _get_espn_groups_api(group_id, cookies, challenge_id=277):
+async def _get_espn_groups_api(group_id, cookies, challenge_id=_ESPN_CHALLENGE_ID_FALLBACK):
     """
     Check if the user has multiple ESPN groups via the members API.
     Returns list of {name, groupId, url} dicts.

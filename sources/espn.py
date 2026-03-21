@@ -59,6 +59,12 @@ def check_championship_final(gender):
     else:
         url = "https://site.api.espn.com/apis/site/v2/sports/basketball/womens-college-basketball/scoreboard?groups=100&limit=50"
 
+    # Must not confirm championship before April — guards against conference
+    # championship games (also called "championship") triggering a false positive.
+    today = datetime.date.today()
+    if today.month < 4:
+        return None
+
     try:
         resp = requests.get(url, timeout=10)
         resp.raise_for_status()
@@ -82,15 +88,19 @@ def check_championship_final(gender):
 
             comp = event["competitions"][0]
             status = comp["status"]["type"]["name"].upper()
-            # print(f"[DEBUG] Found {gender} championship game: '{event.get('name')}' | Status: {status}")
 
             if status in ("STATUS_FINAL", "FINAL"):
                 raw_date = event.get("date", "")
                 try:
-                    # ESPN dates are ISO format UTC e.g. "2026-04-06T23:09Z"
                     end_date = datetime.date.fromisoformat(raw_date[:10])
                 except Exception:
                     end_date = datetime.date.today()
+
+                # Double-check: must be in April or later to be the NCAA championship
+                if end_date.month < 4:
+                    print(f"[INFO] Skipping '{event.get('name')}' — final date {end_date} is before April (not NCAA championship)")
+                    continue
+
                 print(f"[INFO] {gender.capitalize()} championship is final — ended {end_date}")
                 return end_date
 

@@ -22,7 +22,7 @@ def _auto_patch_ask_slack_credentials_cli():
     """
     with patch(
         "bot_setup.bot_setup.ask_slack_credentials_cli",
-        side_effect=lambda c: c
+        side_effect=lambda c: {**c, "SLACK_WEBHOOK_URL": c.get("SLACK_WEBHOOK_URL") or "https://hooks.slack.com/services/TEST/TEST/TEST"}
     ):
         yield
 
@@ -40,7 +40,9 @@ def base_config():
             "MINUTES_BETWEEN_MESSAGES": 30,
             "PLAYWRIGHT_HEADLESS": True,
             "PLAYWRIGHT_STATE": "playwright_state.json",
-            "POOLS": [{"SOURCE": "cbs", "MEN_URL": "https://picks.cbssports.com/college-basketball/ncaa-tournament/bracket/pools/unittestpool1/standings", "WOMEN_URL": "https://picks.cbssports.com/college-basketball/ncaaw-tournament/bracket/pools/unittestpool2/standings"}],
+            "POOLS": [{"SOURCE": "cbs",
+                       "MEN_URL": "https://picks.cbssports.com/college-basketball/ncaa-tournament/bracket/pools/realpool1/standings",
+                       "WOMEN_URL": "https://picks.cbssports.com/college-basketball/ncaaw-tournament/bracket/pools/realpool2/standings"}],
             "SLACK_WEBHOOK_URL": "https://hooks.slack.com/services/TEST/TEST/TEST",
             "SLACK_MANAGER_ID": "U012TEST",
             "MOCK_SLACK": True,

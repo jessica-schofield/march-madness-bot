@@ -345,13 +345,10 @@ def run_setup(existing_config=None):
             method = "cli"
 
     if method == "cli":
-        # Always ask for credentials first — required before anything else
-        config = ask_slack_credentials_cli(config)
-        save_json(CONFIG_FILE, config)
+        config["PLAYWRIGHT_HEADLESS"] = PLAYWRIGHT_HEADLESS
+        config["PLAYWRIGHT_STATE"] = PLAYWRIGHT_STATE
 
-        if not config.get("SLACK_WEBHOOK_URL"):
-            print("[WARN] No Slack webhook URL provided — cannot go live without it.")
-            return config, method, [], [], [], []
+        # REMOVED: ask_slack_credentials_cli — now asked after preview (below)
 
         ask_if_missing(config, "TOP_N", "How many top users to display?", default="5", cast=int)
         ask_if_missing(config, "MINUTES_BETWEEN_MESSAGES", "Minutes between messages?", default="60", cast=int)
@@ -371,16 +368,12 @@ def run_setup(existing_config=None):
             default=_DEFAULT_TOURNAMENT_END_WOMEN.isoformat()
         )
 
-        config["PLAYWRIGHT_HEADLESS"] = PLAYWRIGHT_HEADLESS
-        config["PLAYWRIGHT_STATE"] = PLAYWRIGHT_STATE
-
         config.setdefault("POOLS", [{"SOURCE": "custom"}])
         if not config["POOLS"]:
             print("[ERROR] No POOLS configured — cannot continue. Add pool URLs and run setup again.")
             return config, config.get("METHOD", "cli"), [], [], [], []
         pool = config["POOLS"][0]
 
-        # prompt if missing OR still a placeholder
         if not pool.get("MEN_URL") or _is_placeholder_url(pool.get("MEN_URL")):
             pool["MEN_URL"] = get_input_safe(
                 "Paste your men's bracket pool standings URL (CBS, ESPN, Yahoo, etc.), or leave blank to skip",
@@ -403,6 +396,7 @@ def run_setup(existing_config=None):
                 config["MANUAL_TOP"] = None
 
         save_json(CONFIG_FILE, config)
+        # NOTE: Slack credentials asked AFTER preview — see below
 
     # second guard after both method branches
     config.setdefault("POOLS", [{"SOURCE": "custom"}])
@@ -573,6 +567,14 @@ def run_setup(existing_config=None):
             if text:
                 print(text)
         print("-------------------------------------\n")
+
+        if method == "cli":
+            config = ask_slack_credentials_cli(config)
+            save_json(CONFIG_FILE, config)
+
+            if not config.get("SLACK_WEBHOOK_URL"):
+                print("[WARN] No Slack webhook URL provided — cannot go live without it.")
+                return config, method, men_games, women_games, top_men, top_women
 
         confirm = get_input_safe(
             "Ready to go live? This will post the intro + today's summary to Slack (y/n)",
