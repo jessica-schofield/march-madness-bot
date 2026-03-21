@@ -199,37 +199,67 @@ def commit_and_tag(version, message):
 # Main
 # ---------------------------------------------------------------------------
 
+def prompt_version_part():
+    """Interactively ask which part of the version to bump."""
+    current = get_current_version()
+    parts = current.split(".")
+    major, minor, patch_n = int(parts[0]), int(parts[1]), int(parts[2])
+
+    print(f"\nCurrent version: {current}")
+    print("\nWhat kind of release is this?")
+    print(f"  [1] patch  — bug fix         ({current} → {major}.{minor}.{patch_n + 1})")
+    print(f"  [2] minor  — new feature     ({current} → {major}.{minor + 1}.0)")
+    print(f"  [3] major  — breaking change ({current} → {major + 1}.0.0)")
+    choice = input("\nChoose [1/2/3] (default: 1): ").strip() or "1"
+    return {"1": "patch", "2": "minor", "3": "major"}.get(choice, "patch")
+
+
+def get_current_version():
+    content = read(VERSION_FILE)
+    match = re.search(r'"VERSION":\s*"(\d+\.\d+\.\d+)"', content)
+    return match.group(1) if match else "unknown"
+
+
 def main():
     parser = argparse.ArgumentParser(description="March Madness Bot release agent")
     parser.add_argument("part", choices=["patch", "minor", "major"],
-                        nargs="?", default="patch",
-                        help="Version part to bump (default: patch)")
-    parser.add_argument("--message", "-m", default="Maintenance update",
+                        nargs="?", default=None,
+                        help="Version part to bump — omit to be prompted")
+    parser.add_argument("--message", "-m", default=None,
                         help="Changelog entry and commit message")
-    parser.add_argument("--skip-tests", action="store_true",
-                        help="Skip test suite (not recommended)")
-    parser.add_argument("--dry-run", action="store_true",
-                        help="Preview changes without writing anything")
+    parser.add_argument("--skip-tests", action="store_true")
+    parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
 
     if args.dry_run:
         print("[DRY RUN] No files will be written or committed.\n")
 
+    # Prompt if not provided as argument
+    part = args.part or prompt_version_part()
+
+    message = args.message
+    if not message:
+        message = input("\nChangelog entry / commit message: ").strip()
+        if not message:
+            print("[ERROR] Commit message is required.")
+            sys.exit(1)
+
     ensure_gitignore()
     untrack_sensitive_files()
 
     if not args.dry_run:
-        version = bump_version(args.part)
-        update_changelog(version, args.message)
+        version = bump_version(part)
+        update_changelog(version, message)
         update_readme(version)
 
         if not args.skip_tests:
             run_tests()
 
-        commit_and_tag(version, args.message)
+        commit_and_tag(version, message)
         print(f"\n✅ Released v{version}")
     else:
-        print("\n[DRY RUN] Complete — re-run without --dry-run to apply.")
+        print(f"\n[DRY RUN] Would bump '{part}' → next version")
+        print(f"[DRY RUN] Complete — re-run without --dry-run to apply.")
 
 
 if __name__ == "__main__":
