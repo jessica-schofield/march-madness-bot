@@ -17,7 +17,7 @@ __pycache__/
 cbs_cookies.json
 
 # Config File
-# config.json
+config.json
 
 *.env
 *.log
@@ -25,3 +25,6 @@ yearly_reminder_flag.json
 playwright_state.json.env
 .env
 debug_page.html
+bot_setup/config.json
+yearly_flag.json
+status/incomplete_config.json

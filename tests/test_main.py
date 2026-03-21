@@ -435,6 +435,8 @@ class TestSetupMethod:
             asked_keys.append(key)
 
         with patch("bot_setup.bot_setup.get_input_safe", return_value="cli"), \
+             patch("bot_setup.bot_setup.ask_slack_credentials_cli",
+                   side_effect=lambda c: {**c, "SLACK_WEBHOOK_URL": "https://hooks.slack.com/services/TEST/TEST/TEST"}), \
              patch("bot_setup.bot_setup.ask_if_missing", side_effect=_capture), \
              patch("bot_setup.bot_setup.get_final_games", return_value=[]), \
              patch("bot_setup.bot_setup.run_async", return_value=[]), \
@@ -459,7 +461,7 @@ class TestSetupMethod:
 
         with patch("bot_setup.bot_setup.get_input_safe", return_value="slack"), \
              patch("bot_setup.bot_setup.ask_slack_credentials_cli",
-                   return_value={}), \
+                   return_value={"SLACK_WEBHOOK_URL": "https://hooks.slack.com/services/TEST/TEST/TEST"}), \
              patch("bot_setup.bot_setup.ask_if_missing", side_effect=_capture), \
              patch("bot_setup.bot_setup.get_final_games", return_value=[]), \
              patch("bot_setup.bot_setup.run_async", return_value=[]), \

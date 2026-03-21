@@ -253,7 +253,10 @@ def test_run_setup_invalid_method_falls_back_to_cli(
 @patch("bot_setup.bot_setup.get_input_safe", return_value="cli")
 def test_run_setup_missing_pools_returns_early(mock_input, mock_ask, mock_save, capsys):
     from bot_setup.bot_setup import run_setup
-    with patch("bot_setup.bot_setup.get_final_games", return_value=[]):
+    with patch("bot_setup.bot_setup.get_final_games", return_value=[]), \
+         patch("bot_setup.bot_setup.ask_slack_credentials_cli",
+               return_value={"SLACK_WEBHOOK_URL": "https://hooks.slack.com/services/TEST/TEST/TEST",
+                             "POOLS": []}):
         result = run_setup({"METHOD": "cli", "POOLS": []})
     assert "[ERROR]" in capsys.readouterr().out
     assert result is not None and len(result) == 6

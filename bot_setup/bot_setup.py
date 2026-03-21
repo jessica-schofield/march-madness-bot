@@ -345,6 +345,14 @@ def run_setup(existing_config=None):
             method = "cli"
 
     if method == "cli":
+        # Always ask for credentials first — required before anything else
+        config = ask_slack_credentials_cli(config)
+        save_json(CONFIG_FILE, config)
+
+        if not config.get("SLACK_WEBHOOK_URL"):
+            print("[WARN] No Slack webhook URL provided — cannot go live without it.")
+            return config, method, [], [], [], []
+
         ask_if_missing(config, "TOP_N", "How many top users to display?", default="5", cast=int)
         ask_if_missing(config, "MINUTES_BETWEEN_MESSAGES", "Minutes between messages?", default="60", cast=int)
         ask_if_missing(config, "POST_WEEKENDS", "Post on weekends? (y/n)", default="n", cast=lambda x: x.lower() == "y")

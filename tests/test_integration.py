@@ -18,7 +18,8 @@ def _base_config(**overrides):
         "POOLS": [{"SOURCE": "cbs",
                    "MEN_URL": "https://picks.cbssports.com/college-basketball/ncaa-tournament/bracket/pools/unittestpool1/standings",
                    "WOMEN_URL": "https://picks.cbssports.com/college-basketball/ncaaw-tournament/bracket/pools/unittestpool2/standings"}],
-        "SLACK_WEBHOOK_URL": "",
+        "SLACK_WEBHOOK_URL": "https://hooks.slack.com/services/TEST/TEST/TEST",
+        "SLACK_MANAGER_ID": "U012TEST",
         "MOCK_SLACK": True,
         "POST_ON_WEEKENDS": True,
         "MANUAL_TOP": ["Alice (100)", "Bob (90)", "Carol (80)"],
@@ -72,6 +73,7 @@ def _standard_patches(**overrides):
     This ensures forgotten mocks fail loudly rather than silently returning a value.
     """
     mocks = {
+        "ask_slack_credentials_cli":  MagicMock(side_effect=lambda c: {**c, "SLACK_WEBHOOK_URL": c.get("SLACK_WEBHOOK_URL") or "https://hooks.slack.com/services/TEST/TEST/TEST"}),
         "ensure_cbs_login":           MagicMock(),
         "get_top_n_async":            MagicMock(),
         "run_async":                  MagicMock(return_value=[]),
@@ -87,7 +89,8 @@ def _standard_patches(**overrides):
     }
     mocks.update(overrides)
 
-    with patch("bot_setup.bot_setup.ensure_cbs_login",           mocks["ensure_cbs_login"]), \
+    with patch("bot_setup.bot_setup.ask_slack_credentials_cli",  mocks["ask_slack_credentials_cli"]), \
+         patch("bot_setup.bot_setup.ensure_cbs_login",           mocks["ensure_cbs_login"]), \
          patch("bot_setup.bot_setup.get_top_n_async",            mocks["get_top_n_async"]), \
          patch("bot_setup.bot_setup.run_async",                  mocks["run_async"]), \
          patch("bot_setup.bot_setup.get_final_games",            mocks["get_final_games"]), \

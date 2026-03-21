@@ -89,9 +89,18 @@ def run(config=None, yearly_flag=None):
         manager_id = config.get("SLACK_MANAGER_ID", "")
         yearly_reminder(config, manager_id)
 
-    last_post = load_json(LAST_POST_FILE, {})
-    if needs_config_reminder(config, last_post):
-        print("[REMIND] Config incomplete — please finish setup.")
+    # Only check config reminder if bot is not live
+    if not load_json(YEARLY_FLAG_FILE, {}).get("LIVE_FOR_YEAR"):
+        last_post = load_json(LAST_POST_FILE, {})
+        last_post_dt = None
+        if isinstance(last_post, dict) and last_post.get("time"):
+            try:
+                import datetime
+                last_post_dt = datetime.datetime.fromisoformat(last_post["time"])
+            except ValueError:
+                pass
+        if needs_config_reminder(config, last_post_dt):
+            print("[REMIND] Config incomplete — please finish setup.")
 
     print("[INFO] Done.")
 

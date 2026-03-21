@@ -25,7 +25,7 @@ REQUIRED_KEYS = {
     "SLACK_WEBHOOK_URL": "",
     "SLACK_MANAGER_ID": "",
     "LIVE_COUNTER_URL": "",
-    "VERSION": "1.0.0",
+    "VERSION": "1.1.0",
 }
 
 # Keys that are allowed to be empty string — they are optional
