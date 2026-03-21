@@ -201,7 +201,7 @@ def ask_manual_top_users(user_id, gender_label, top_n):
 
     return results
 
-yesterday = (datetime.datetime.utcnow() - datetime.timedelta(days=1)).strftime("%Y%m%d")
+yesterday = (datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(days=1)).strftime("%Y%m%d")
 # No timezone awareness — midnight EST vs UTC can be off by 5 hours
 
 NCAA_TOURNAMENT_GROUP_ID = 100  # hardcoded magic number
