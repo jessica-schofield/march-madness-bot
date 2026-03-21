@@ -1,9 +1,15 @@
-beautifulsoup4==4.14.3
-certifi==2026.2.25
-charset-normalizer==3.4.6
-idna==3.11
-python-dotenv==1.2.1
-requests==2.32.5
-soupsieve==2.8.3
-typing_extensions==4.15.0
-urllib3==2.6.3
+(venv) jess@Jesss-MacBook-Pro march-madness-bot % python -c "import config; print('config OK')"
+python -c "import bot_setup; print('bot_setup OK')"
+python -c "import main; print('main OK')"
+Traceback (most recent call last):
+  File "<string>", line 1, in <module>
+ModuleNotFoundError: No module named 'config'
+Traceback (most recent call last):
+  File "<string>", line 1, in <module>
+ModuleNotFoundError: No module named 'bot_setup'
+Traceback (most recent call last):
+  File "<string>", line 1, in <module>
+  File "/Users/jess/march-madness-bot/main.py", line 10, in <module>
+    from config import CONFIG_FILE, SEEN_FILE, LAST_POST_FILE, YEARLY_FLAG_FILE, load_json, save_json, needs_setup
+ModuleNotFoundError: No module named 'config'
+(venv) jess@Jesss-MacBook-Pro march-madness-bot % 

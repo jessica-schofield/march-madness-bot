@@ -13,6 +13,7 @@ import slack_setup
 
 CONFIG_FILE = Path("config.json")
 
+
 def get_input(prompt, default=None, required=False):
     while True:
         val = input(f"{prompt} " + (f"[Default: {default}]: " if default else ": "))
@@ -22,6 +23,7 @@ def get_input(prompt, default=None, required=False):
             return val
         if required:
             print("This field is required. Please enter a value.")
+
 
 def command_line_setup():
     print("\n=== COMMAND LINE SETUP ===")
@@ -49,6 +51,7 @@ def command_line_setup():
     print("\n✅ Configuration saved to config.json")
     print("You can now run `python3 main.py` to start the bot.\n")
 
+
 def slack_dm_setup():
     print("\n=== SLACK DM SETUP ===")
     print("We'll need your Slack ID to DM you for setup instructions.")
@@ -57,16 +60,17 @@ def slack_dm_setup():
     print("2. Click your profile -> 'Copy member ID'.")
     print("3. Paste it below.\n")
     slack_id = get_input("Enter your Slack ID", required=True)
-    
+
     # Save minimal config for DM setup
     config = {"SLACK_MANAGER_ID": slack_id, "MOCK_SLACK": True}
     with CONFIG_FILE.open("w") as f:
         json.dump(config, f, indent=2)
-    
+
     print("\nRunning Slack interactive setup (mock)...")
     client = None  # In real world: WebClient(token="YOUR_SLACK_BOT_TOKEN")
     slack_setup.run_setup(client, slack_id)
     print("\n✅ Slack setup complete. config.json updated.\n")
+
 
 def main_setup():
     print("\nWelcome to March Madness Bot setup!\n")
@@ -81,6 +85,7 @@ def main_setup():
         slack_dm_setup()
     else:
         print("Invalid choice. Please run setup again and enter 1 or 2.")
+
 
 if __name__ == "__main__":
     main_setup()
