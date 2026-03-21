@@ -6,6 +6,11 @@ from pathlib import Path
 from urllib.parse import urlparse, urlencode
 from playwright.async_api import async_playwright
 
+# ⚠️ UPDATE each March — find the new ID in DevTools:
+#    Network → gambit-api.fantasy.espn.com/apis/v1/challenges/<slug>
+#    The "id" field in the response is the challenge ID.
+_ESPN_CHALLENGE_ID_FALLBACK = 277  # Men's 2026
+
 
 def same_domain(url1, url2):
     if not url1 or not url2:
