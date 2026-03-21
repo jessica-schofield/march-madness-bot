@@ -1,8 +1,10 @@
 import json
 import datetime
+import shutil
 from pathlib import Path
 
 CONFIG_FILE = Path(__file__).parent / "config.json"
+CONFIG_EXAMPLE_FILE = Path(__file__).parent / "config.example.json"
 SEEN_FILE = Path("seen_games.json")
 LAST_POST_FILE = Path("last_post.json")
 LAST_RANKINGS_FILE = Path("last_rankings.json")
@@ -36,12 +38,31 @@ _FALLBACK_TOURNAMENT_END_WOMEN = datetime.date(2026, 4, 6)
 _MISSING = object()  # sentinel so callers can pass None or [] as explicit defaults
 
 
+def _seed_config_from_example():
+    """
+    Copy config.example.json → config.json on first run so new users
+    get a valid starting point without any manual steps.
+    """
+    if CONFIG_EXAMPLE_FILE.exists():
+        shutil.copy(CONFIG_EXAMPLE_FILE, CONFIG_FILE)
+        print(f"[INFO] Created config.json from config.example.json")
+    else:
+        CONFIG_FILE.write_text(json.dumps({}, indent=2))
+        print(f"[WARN] config.example.json not found — created empty config.json")
+
+
 def load_json(path, default=_MISSING):
     if default is _MISSING:
         default = {}
-    if Path(path).exists():
+    target = Path(path)
+
+    # Seed config.json from example on first run
+    if not target.exists() and target.resolve() == CONFIG_FILE.resolve():
+        _seed_config_from_example()
+
+    if target.exists():
         try:
-            with open(path) as f:
+            with open(target) as f:
                 return json.load(f)
         except Exception as e:
             print(f"[WARN] Failed to load {path}: {e}")
