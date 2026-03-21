@@ -109,23 +109,26 @@ def test_ping_live_counter_includes_year_and_version_in_url():
 # Integration tests — go-live path calls _ping_live_counter
 # ---------------------------------------------------------------------------
 
-def _live_counter_config(**overrides):
-    config = {
+def _live_counter_config():
+    return {
         "METHOD": "cli",
-        "TOP_N": 3,
+        "TOP_N": 5,
         "MINUTES_BETWEEN_MESSAGES": 30,
-        "PLAYWRIGHT_HEADLESS": True,
-        "PLAYWRIGHT_STATE": "playwright_state.json",
-        "POOLS": [{"SOURCE": "cbs", "MEN_URL": "https://example.com/men", "WOMEN_URL": "https://example.com/women"}],
-        "SLACK_WEBHOOK_URL": "",
-        "MOCK_SLACK": True,
-        "POST_ON_WEEKENDS": True,
+        "POST_WEEKENDS": False,
+        "SEND_GAME_UPDATES": True,
+        "SEND_DAILY_SUMMARY": True,
+        "SLACK_WEBHOOK_URL": "https://hooks.slack.com/services/TEST",
+        "SLACK_MANAGER_ID": "",
         "MANUAL_TOP": ["Alice (100)", "Bob (90)", "Carol (80)"],
         "LIVE_COUNTER_URL": "https://script.google.com/fake",
-        "VERSION": "1.0.0",
+        "POOLS": [{"SOURCE": "custom",
+                   "MEN_URL": "https://picks.cbssports.com/college-basketball/ncaa-tournament/bracket/pools/unittestpool1/standings",
+                   "WOMEN_URL": "https://picks.cbssports.com/college-basketball/ncaaw-tournament/bracket/pools/unittestpool2/standings"}],
+        "PLAYWRIGHT_HEADLESS": True,
+        "PLAYWRIGHT_STATE": "playwright_state.json",
+        "TOURNAMENT_END_MEN": "2026-04-07",
+        "TOURNAMENT_END_WOMEN": "2026-04-06",
     }
-    config.update(overrides)
-    return config
 
 
 @pytest.mark.integration
@@ -133,12 +136,8 @@ def test_go_live_calls_ping_counter():
     """When go_live=True, _ping_live_counter is called once."""
     from bot_setup.bot_setup import run_setup
 
-    top = ["Alice (100)", "Bob (90)", "Carol (80)"]
-
     with patch("bot_setup.bot_setup.get_input_safe", side_effect=["cli", "yes"]), \
-            patch("bot_setup.bot_setup.ensure_cbs_login"), \
-            patch("bot_setup.bot_setup.get_top_n_async"), \
-            patch("bot_setup.bot_setup.run_async", return_value=top), \
+            patch("bot_setup.bot_setup._fetch_leaderboard", return_value=[]), \
             patch("bot_setup.bot_setup.get_final_games", return_value=[]), \
             patch("bot_setup.bot_setup.ask_if_missing", side_effect=lambda c, k, *a, **kw: c), \
             patch("bot_setup.bot_setup.load_flag", return_value={"LIVE_FOR_YEAR": False}), \
@@ -159,9 +158,7 @@ def test_go_live_skipped_does_not_call_ping_counter():
     from bot_setup.bot_setup import run_setup
 
     with patch("bot_setup.bot_setup.get_input_safe", side_effect=["cli", "n"]), \
-            patch("bot_setup.bot_setup.ensure_cbs_login"), \
-            patch("bot_setup.bot_setup.get_top_n_async"), \
-            patch("bot_setup.bot_setup.run_async", return_value=[]), \
+            patch("bot_setup.bot_setup._fetch_leaderboard", return_value=[]), \
             patch("bot_setup.bot_setup.get_final_games", return_value=[]), \
             patch("bot_setup.bot_setup.ask_if_missing", side_effect=lambda c, k, *a, **kw: c), \
             patch("bot_setup.bot_setup.load_flag", return_value={"LIVE_FOR_YEAR": False}), \

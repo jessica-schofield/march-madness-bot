@@ -67,6 +67,38 @@ Config is saved to `config.json` and reused on subsequent runs.
 
 ---
 
+## Running the Bot
+
+The bot is designed to be invoked by cron. Each run it checks for new final games, scrapes the leaderboard, and posts to Slack if there is anything new to report — then exits.
+
+**`main.py` does not loop or sleep.** Scheduling is handled entirely by cron.
+
+### Crontab setup (one-time)
+
+Only one cron entry is needed:
+
+```cron
+*/5 * * * * cd /path/to/march-madness-bot && /path/to/venv/bin/python main.py >> /path/to/march-madness-bot/cron.log 2>&1
+```
+
+Edit with `crontab -e`. Replace `/path/to/` with your actual install path.
+
+**You never need to update the crontab again.** When both championships are final, the bot automatically:
+- Posts a season wrap-up message to Slack
+- Sets itself to sleep (`LIVE_FOR_YEAR = false`)
+- Advances `TOURNAMENT_END_MEN` and `TOURNAMENT_END_WOMEN` in `config.json` by one year
+- Schedules a March 10 reminder in crontab for next year
+
+### Stopping the bot manually
+
+```sh
+python3 main.py stop
+```
+
+This sets the `LIVE_FOR_YEAR` flag to `False` so the bot skips posting until re-setup next year.
+
+---
+
 ## Running
 
 ```sh

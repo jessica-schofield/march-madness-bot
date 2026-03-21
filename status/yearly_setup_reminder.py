@@ -1,8 +1,10 @@
 import json
 import datetime
+import subprocess
+import re
 from pathlib import Path
 
-from bot_setup.config import YEARLY_FLAG_FILE
+from bot_setup.config import YEARLY_FLAG_FILE, CONFIG_FILE
 
 FLAG_FILE = YEARLY_FLAG_FILE
 
@@ -18,15 +20,20 @@ def load_flag():
 
 
 def next_weekday_morning(hour=9):
-    """Return a datetime for 9am on the next weekday."""
+    """Return a datetime for the next weekday at the given hour."""
     now = datetime.datetime.now()
-    candidate = now.replace(hour=hour, minute=0, second=0, microsecond=0)
-    if candidate <= now:
-        candidate += datetime.timedelta(days=1)
-    # skip Saturday (5) and Sunday (6)
-    while candidate.weekday() >= 5:
-        candidate += datetime.timedelta(days=1)
-    return candidate
+    next_day = now + datetime.timedelta(days=1)
+    while next_day.weekday() >= 5:
+        next_day += datetime.timedelta(days=1)
+    return next_day.replace(hour=hour, minute=0, second=0, microsecond=0)
+
+
+def next_business_day(date):
+    """Return the next weekday (Mon–Fri) on or after the given date."""
+    result = date
+    while result.weekday() >= 5:  # 5 = Saturday, 6 = Sunday
+        result += datetime.timedelta(days=1)
+    return result
 
 
 def needs_config_reminder(config, last_reminded_at=None):
@@ -62,14 +69,77 @@ def next_year_kickoff():
     return kickoff
 
 
+def _advance_tournament_dates(config):
+    """
+    Bump TOURNAMENT_END_MEN and TOURNAMENT_END_WOMEN forward by exactly one year
+    and save to config.json. Called automatically after both championships are final.
+    """
+    changed = False
+    for key in ("TOURNAMENT_END_MEN", "TOURNAMENT_END_WOMEN"):
+        raw = config.get(key)
+        if raw:
+            try:
+                old = datetime.date.fromisoformat(raw)
+                new = old.replace(year=old.year + 1)
+                config[key] = new.isoformat()
+                print(f"[INFO] Advanced {key}: {old} → {new}")
+                changed = True
+            except ValueError:
+                print(f"[WARN] Could not parse {key}={raw!r} — skipping date advance")
+    if changed:
+        from bot_setup.config import save_json
+        save_json(CONFIG_FILE, config)
+    return config
+
+
+def _update_yearly_crontab(kickoff: datetime.datetime):
+    """
+    Replace the yearly_setup_cron.py crontab entry with one scheduled for
+    March 10 of next year (or next Monday if March 10 falls on a weekend).
+    No-ops gracefully if the entry is not found.
+    """
+    try:
+        result = subprocess.run(["crontab", "-l"], capture_output=True, text=True)
+        existing = result.stdout
+
+        # Match the yearly_setup_cron line regardless of current date fields
+        pattern = re.compile(
+            r"^[^\n]*yearly_setup_cron\.py[^\n]*$", re.MULTILINE
+        )
+        new_entry = (
+            f"0 10 {kickoff.day} {kickoff.month} * "
+            f"/Users/jess/march-madness-bot/venv/bin/python "
+            f"/Users/jess/march-madness-bot/status/yearly_setup_cron.py "
+            f">> /Users/jess/march-madness-bot/cron.log 2>&1"
+        )
+
+        if pattern.search(existing):
+            updated = pattern.sub(new_entry, existing)
+            print(f"[INFO] Updating yearly crontab entry to: {new_entry}")
+        else:
+            updated = existing.rstrip("\n") + "\n" + new_entry + "\n"
+            print(f"[INFO] Adding yearly crontab entry: {new_entry}")
+
+        proc = subprocess.run(["crontab", "-"], input=updated, text=True, capture_output=True)
+        if proc.returncode == 0:
+            print(f"[INFO] Crontab updated — yearly reminder set for {kickoff.strftime('%B %d %Y at %I:%M%p')}.")
+        else:
+            print(f"[WARN] crontab update failed: {proc.stderr.strip()}")
+    except Exception as e:
+        print(f"[WARN] Could not update crontab: {e}")
+
+
 def check_tournament_end(config):
     """
     Called at every startup while bot is live.
     Polls ESPN to see if the men's and women's championship games are final.
-    Once both are done, posts a wrap-up message and schedules next year's reminder.
-    Caches results in yearly_flag.json so we don't re-fire after wrap-up is sent.
+    Once both are done:
+      - posts a wrap-up Slack message
+      - sets LIVE_FOR_YEAR=False in yearly_flag.json
+      - advances TOURNAMENT_END_MEN/WOMEN by one year in config.json
+      - updates the yearly crontab entry to March 10 next year
     """
-    from espn import check_championship_final
+    from sources.espn import check_championship_final
 
     flag = load_flag()
 
@@ -78,7 +148,6 @@ def check_tournament_end(config):
     if flag.get("TOURNAMENT_ENDED"):
         return
 
-    # Check each gender — cache results so we don't lose them on the next run
     if not flag.get("MEN_CHAMPIONSHIP_DATE"):
         men_date = check_championship_final("men")
         if men_date:
@@ -97,7 +166,6 @@ def check_tournament_end(config):
     women_done = flag.get("WOMEN_CHAMPIONSHIP_DATE")
 
     if not men_done or not women_done:
-        # At least one tournament still in progress
         missing = []
         if not men_done:
             missing.append("men's")
@@ -123,7 +191,7 @@ def check_tournament_end(config):
         "See you then! 🏀"
     )
 
-    from slack_utils import post_message
+    from slack_bot.slack_utils import post_message
     post_message(config, text=wrap_up, mock=mock)
 
     flag["LIVE_FOR_YEAR"] = False
@@ -131,6 +199,11 @@ def check_tournament_end(config):
     flag["STOPPED"] = False
     flag["NEXT_REMINDER"] = kickoff.isoformat()
     save_flag(flag)
+
+    # Auto-advance dates and crontab — no manual steps needed next year
+    _advance_tournament_dates(config)
+    _update_yearly_crontab(kickoff)
+
     print(f"[INFO] Next-year reminder scheduled for {kickoff.strftime('%A %B %d %Y at 10:00am')}.")
 
 
@@ -177,7 +250,7 @@ def yearly_reminder(config, manager_id):
         print(f"\n[REMINDER — MOCK SLACK]\n{reminder_text}")
         print(f"Next reminder: {next_morning.strftime('%A %B %d at 9:00am')}\n")
     else:
-        from slack_utils import post_message
+        from slack_bot.slack_utils import post_message
         post_message(config, text=reminder_text)
         print(f"[INFO] Reminder sent. Next: {next_morning.strftime('%A %B %d at 9:00am')}.")
 
@@ -191,5 +264,5 @@ def handle_stop(config):
     if mock:
         print(f"[MOCK SLACK] {msg}")
     else:
-        from slack_utils import post_message
+        from slack_bot.slack_utils import post_message
         post_message(config, text=msg)

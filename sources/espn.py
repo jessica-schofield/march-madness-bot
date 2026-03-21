@@ -18,12 +18,12 @@ def get_final_games(gender):
         resp = requests.get(url, timeout=10)
         resp.raise_for_status()
         data = resp.json()
-        print(f"[DEBUG] ESPN returned {len(data.get('events', []))} events for {gender}")
+        # print(f"[DEBUG] ESPN returned {len(data.get('events', []))} events for {gender}")
         for event in data.get("events", []):
             try:
                 comp = event["competitions"][0]
                 status = comp["status"]["type"]["name"].upper()
-                print(f"[DEBUG] Game: {event.get('name')} | Status: {status}")
+                # print(f"[DEBUG] Game: {event.get('name')} | Status: {status}")
                 if status not in ("STATUS_FINAL", "FINAL"):
                     continue
                 teams = {t["homeAway"]: t for t in comp["competitors"]}
@@ -82,7 +82,7 @@ def check_championship_final(gender):
 
             comp = event["competitions"][0]
             status = comp["status"]["type"]["name"].upper()
-            print(f"[DEBUG] Found {gender} championship game: '{event.get('name')}' | Status: {status}")
+            # print(f"[DEBUG] Found {gender} championship game: '{event.get('name')}' | Status: {status}")
 
             if status in ("STATUS_FINAL", "FINAL"):
                 raw_date = event.get("date", "")

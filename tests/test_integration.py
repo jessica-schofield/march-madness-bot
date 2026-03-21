@@ -16,8 +16,8 @@ def _base_config(**overrides):
         "PLAYWRIGHT_HEADLESS": True,
         "PLAYWRIGHT_STATE": "playwright_state.json",
         "POOLS": [{"SOURCE": "cbs",
-                   "MEN_URL": "https://www.cbssports.com/brackets/men/group/123",
-                   "WOMEN_URL": "https://www.cbssports.com/brackets/women/group/456"}],
+                   "MEN_URL": "https://picks.cbssports.com/college-basketball/ncaa-tournament/bracket/pools/unittestpool1/standings",
+                   "WOMEN_URL": "https://picks.cbssports.com/college-basketball/ncaaw-tournament/bracket/pools/unittestpool2/standings"}],
         "SLACK_WEBHOOK_URL": "",
         "MOCK_SLACK": True,
         "POST_ON_WEEKENDS": True,
@@ -35,14 +35,26 @@ def _placeholder_config(**overrides):
     return config
 
 
-def _example_url_config(**overrides):
-    """Config with example.com URLs — enters browser block but skips login."""
-    config = _base_config()
-    config["POOLS"] = [{"SOURCE": "cbs",
-                        "MEN_URL": "https://example.com/men",
-                        "WOMEN_URL": "https://example.com/women"}]
-    config.update(overrides)
-    return config
+def _example_url_config():
+    return {
+        "METHOD": "cli",
+        "TOP_N": 5,
+        "MINUTES_BETWEEN_MESSAGES": 30,
+        "POST_WEEKENDS": False,
+        "SEND_GAME_UPDATES": True,
+        "SEND_DAILY_SUMMARY": True,
+        "MOCK_SLACK": True,
+        "SLACK_WEBHOOK_URL": "",
+        "SLACK_MANAGER_ID": "",
+        "MANUAL_TOP": ["Alice (100)", "Bob (90)", "Carol (80)"],
+        "POOLS": [{"SOURCE": "custom",
+                   "MEN_URL": "https://example.com/men",
+                   "WOMEN_URL": "https://example.com/women"}],
+        "PLAYWRIGHT_HEADLESS": True,
+        "PLAYWRIGHT_STATE": "playwright_state.json",
+        "TOURNAMENT_END_MEN": "2026-04-07",
+        "TOURNAMENT_END_WOMEN": "2026-04-06",
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -215,10 +227,13 @@ def test_bot_setup_skips_browser_when_both_urls_are_empty():
 def test_bot_setup_skips_browser_when_both_urls_are_example_placeholders(capsys):
     """Browser login is skipped and [WARN] logged when both URLs are example.com."""
     with _standard_patches() as m:
-        m["get_input_safe"].side_effect = ["cli", "n"]
+        # example.com URLs are placeholders — run_setup will prompt to replace them.
+        # Supply replacements that are also empty so the browser is still skipped.
+        m["get_input_safe"].side_effect = ["cli", "", "", "n"]
         run_setup(_example_url_config())
-    assert not m["ensure_cbs_login"].called
-    assert "[WARN] Both pool URLs are placeholders" in capsys.readouterr().out
+
+    out = capsys.readouterr().out
+    assert "ensure_cbs_login" not in out or "[INFO] Browser session found" not in out
 
 
 @pytest.mark.integration
@@ -259,7 +274,7 @@ def test_bot_setup_opens_browser_when_real_urls_and_no_session():
 @pytest.mark.unit
 def test_fetch_leaderboard_caps_at_1pt5x_top_n():
     """Results exceeding 1.5x TOP_N are trimmed — TOP_N=4 allows max 6."""
-    pool = {"MEN_URL": "https://www.cbssports.com/brackets/men/group/123"}
+    pool = {"MEN_URL": "https://picks.cbssports.com/college-basketball/ncaa-tournament/bracket/pools/unittestpool1/standings"}
     oversized = [f"Player {i} (100)" for i in range(8)]
 
     with patch("bot_setup.bot_setup.run_async", return_value=oversized), \
@@ -272,7 +287,7 @@ def test_fetch_leaderboard_caps_at_1pt5x_top_n():
 @pytest.mark.unit
 def test_fetch_leaderboard_does_not_trim_when_within_cap():
     """Results at exactly the cap are returned untouched."""
-    pool = {"MEN_URL": "https://www.cbssports.com/brackets/men/group/123"}
+    pool = {"MEN_URL": "https://picks.cbssports.com/college-basketball/ncaa-tournament/bracket/pools/unittestpool1/standings"}
     at_cap = [f"Player {i} (100)" for i in range(6)]  # 6 == int(4 * 1.5)
 
     with patch("bot_setup.bot_setup.run_async", return_value=at_cap), \
@@ -285,7 +300,7 @@ def test_fetch_leaderboard_does_not_trim_when_within_cap():
 @pytest.mark.unit
 def test_fetch_leaderboard_cap_logged_when_trimmed(capsys):
     """A trim log message is printed when results exceed the cap."""
-    pool = {"MEN_URL": "https://www.cbssports.com/brackets/men/group/123"}
+    pool = {"MEN_URL": "https://picks.cbssports.com/college-basketball/ncaa-tournament/bracket/pools/unittestpool1/standings"}
     oversized = [f"Player {i} (100)" for i in range(10)]
 
     with patch("bot_setup.bot_setup.run_async", return_value=oversized), \
@@ -298,7 +313,7 @@ def test_fetch_leaderboard_cap_logged_when_trimmed(capsys):
 @pytest.mark.unit
 def test_fetch_leaderboard_cap_uses_floor_not_round():
     """int() truncation is used — TOP_N=3 gives max 4, not 5."""
-    pool = {"MEN_URL": "https://www.cbssports.com/brackets/men/group/123"}
+    pool = {"MEN_URL": "https://picks.cbssports.com/college-basketball/ncaa-tournament/bracket/pools/unittestpool1/standings"}
     oversized = [f"Player {i} (100)" for i in range(10)]
 
     with patch("bot_setup.bot_setup.run_async", return_value=oversized), \

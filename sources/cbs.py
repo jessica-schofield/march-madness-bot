@@ -17,7 +17,7 @@ def detect_site(url):
     if not url:
         return "unknown"
     netloc = urlparse(url).netloc.lower()
-    if "cbssports.com" in netloc:
+    if "cbssports.com" in netloc or "picks.cbssports.com" in netloc:
         return "cbs"
     if "espn.com" in netloc:
         return "espn"
@@ -296,7 +296,7 @@ def _pick_espn_group_sync(groups, current_group_id, slack_user_id=None):
     group_list = "\n".join(f"{i+1}. {g['name']}" for i, g in enumerate(groups))
 
     if slack_user_id:
-        from slack_dm import send_dm, poll_for_reply
+        from slack_bot.slack_dm import send_dm, poll_for_reply
         channel_id, ts = send_dm(
             slack_user_id,
             f"🏀 I found multiple ESPN bracket groups — which one should I track?\n\n"
@@ -637,7 +637,7 @@ async def ensure_cbs_login(pool, playwright_state_path, slack_user_id=None):
             await page.goto(url)
 
             if slack_user_id:
-                from slack_dm import send_dm, poll_for_reply
+                from slack_bot.slack_dm import send_dm, poll_for_reply
                 channel_id, ts = send_dm(
                     slack_user_id,
                     f"🌐 A browser window just opened for *{site.upper()}*!\n\n"

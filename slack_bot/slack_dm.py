@@ -6,6 +6,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 from slack_sdk import WebClient
 from slack_sdk.errors import SlackApiError
+from status.yearly_setup_reminder import next_weekday_morning
 
 load_dotenv()
 
@@ -97,8 +98,6 @@ def ask_via_dm(user_id, question, default=None, timeout_seconds=1800, optional=F
     Returns their reply text, or default if they time out.
     If optional=True, 'no' or 'skip' returns empty string without scheduling retry.
     """
-    from yearly_setup_reminder import next_weekday_morning
-
     if default is not None:
         full_question = f"{question} (default: {default})\n_Reply here or type `skip` to use the default._"
     elif optional:
@@ -135,7 +134,6 @@ def ask_via_dm(user_id, question, default=None, timeout_seconds=1800, optional=F
 
 def _handle_no_response(user_id, question, default, optional=False):
     """Send timeout message and save pending DM for retry."""
-    from yearly_setup_reminder import next_weekday_morning
     next_morning = next_weekday_morning()
     send_dm(
         user_id,
@@ -149,7 +147,6 @@ def _handle_no_response(user_id, question, default, optional=False):
 
 def save_pending_dm(user_id, question, default, optional=False):
     """Save the pending DM question so it can be retried at next startup."""
-    from yearly_setup_reminder import next_weekday_morning
     data = {
         "user_id": user_id,
         "question": question,

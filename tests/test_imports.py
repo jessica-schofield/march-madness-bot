@@ -17,11 +17,13 @@ MODULES = [
     "bot_setup.setup_cli",
     "slack_bot.messages",
     "slack_bot.slack_utils",
+    "slack_bot.slack_dm",
     "slack_bot.event_server",
     "slack_bot.events",
     "sources.cbs",
     "sources.espn",
     "status.yearly_setup_reminder",
+    "status.yearly_setup_cron",
     "main",
 ]
 
@@ -30,6 +32,64 @@ MODULES = [
 def test_module_imports_cleanly(module):
     """Module must be importable with no side-effects or missing dependencies."""
     importlib.import_module(module)
+
+
+# ---------------------------------------------------------------------------
+# Bare import guard — catches `from slack_dm import` style regressions
+# across every first-party module in one place.
+# ---------------------------------------------------------------------------
+# All modules whose source should be scanned for bare imports.
+# Add new modules here as the project grows.
+_ALL_FIRST_PARTY_MODULES = [
+    "bot_setup.bot_setup",
+    "bot_setup.config",
+    "bot_setup.setup_cli",
+    "slack_bot.messages",
+    "slack_bot.slack_utils",
+    "slack_bot.slack_dm",
+    "slack_bot.event_server",
+    "slack_bot.events",
+    "sources.cbs",
+    "sources.espn",
+    "status.yearly_setup_reminder",
+    "status.yearly_setup_cron",
+]
+
+# Any bare `from X import` where X is one of these is a bug —
+# the full package path must be used instead.
+_BARE_IMPORT_PATTERNS = [
+    "from espn import",
+    "from cbs import",
+    "from slack_utils import",
+    "from slack_dm import",
+    "from messages import",
+    "from config import",
+    "from slack import",
+    "from yearly_setup_reminder import",
+    "from yearly_setup_cron import",
+    "from bot_setup import",
+    "from setup_cli import",
+    "from event_server import",
+    "from events import",
+]
+
+
+@pytest.mark.parametrize("module", _ALL_FIRST_PARTY_MODULES)
+def test_no_bare_imports(module):
+    """
+    Every first-party module must use full package paths.
+    e.g. `from slack_bot.slack_dm import X` not `from slack_dm import X`.
+    This catches the class of bug where a module works in one directory
+    context but breaks when run from project root.
+    """
+    import inspect
+    mod = importlib.import_module(module)
+    source = inspect.getsource(mod)
+    for pattern in _BARE_IMPORT_PATTERNS:
+        assert pattern not in source, (
+            f"{module} contains bare import '{pattern}'\n"
+            f"Use the full package path instead, e.g. 'from slack_bot.slack_dm import ...'"
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -109,3 +169,29 @@ def test_slack_bot_slack_setup_does_not_exist():
     import importlib
     with pytest.raises(ModuleNotFoundError):
         importlib.import_module("slack_bot.slack_setup")
+
+
+def test_yearly_setup_reminder_imports_espn_from_sources():
+    import inspect
+    from status import yearly_setup_reminder
+    source = inspect.getsource(yearly_setup_reminder)
+    assert "from espn import" not in source, \
+        "yearly_setup_reminder must use 'from sources.espn import', not bare 'from espn import'"
+    assert "from slack_utils import" not in source, \
+        "yearly_setup_reminder must use 'from slack_bot.slack_utils import', not bare 'from slack_utils import'"
+
+
+def test_yearly_setup_cron_no_bare_imports():
+    import inspect
+    from status import yearly_setup_cron
+    source = inspect.getsource(yearly_setup_cron)
+    for bare in ("from espn import", "from cbs import", "from slack_utils import",
+                 "from messages import", "from config import"):
+        assert bare not in source, \
+            f"yearly_setup_cron must not use bare '{bare}' — use full package path"
+
+
+def test_status_modules_import_without_error():
+    import importlib
+    for mod in ("status.yearly_setup_reminder", "status.yearly_setup_cron"):
+        importlib.import_module(mod)  # will raise if any import inside is broken

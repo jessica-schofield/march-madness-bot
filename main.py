@@ -28,7 +28,12 @@ def run(config=None, yearly_flag=None):
 
     if needs_setup(config) or not yearly_flag.get("LIVE_FOR_YEAR"):
         print("[INFO] Config incomplete — running setup...")
-        config, _, men_games, women_games, top_men, top_women = run_setup(config)
+        setup_config = {k: v for k, v in config.items() if k != "METHOD"}
+        result = run_setup(setup_config)
+        if result is None or result[0] is None:
+            print("[INFO] Setup incomplete — exiting.")
+            return
+        config, _, men_games, women_games, top_men, top_women = result
     else:
         men_games = get_final_games("men")
         women_games = get_final_games("women")
