@@ -21,20 +21,20 @@ def _base_config(**overrides):
 
 @pytest.mark.integration
 def test_bot_runs_end_to_end_mock_mode():
-    from bot_setup import run_setup
+    from bot_setup.bot_setup import run_setup
 
-    with patch("bot_setup.get_input_safe", side_effect=["cli", "n"]), \
-            patch("bot_setup.ensure_cbs_login"), \
-            patch("bot_setup.get_top_n_async"), \
-            patch("bot_setup.run_async", return_value=[]), \
-            patch("bot_setup.get_final_games", return_value=[]), \
-            patch("bot_setup.ask_if_missing", side_effect=lambda c, k, *a, **kw: c), \
-            patch("bot_setup.load_flag", return_value={"LIVE_FOR_YEAR": False}), \
-            patch("bot_setup.deduplicate_top_users", side_effect=lambda x: x), \
-            patch("bot_setup.build_daily_summary", return_value=([{"type": "section"}], False)), \
-            patch("bot_setup.build_yearly_intro_message", return_value="intro"), \
-            patch("bot_setup.post_message"), \
-            patch("config.save_json"):
+    with patch("bot_setup.bot_setup.get_input_safe", side_effect=["cli", "n"]), \
+            patch("bot_setup.bot_setup.ensure_cbs_login"), \
+            patch("bot_setup.bot_setup.get_top_n_async"), \
+            patch("bot_setup.bot_setup.run_async", return_value=[]), \
+            patch("bot_setup.bot_setup.get_final_games", return_value=[]), \
+            patch("bot_setup.bot_setup.ask_if_missing", side_effect=lambda c, k, *a, **kw: c), \
+            patch("bot_setup.bot_setup.load_flag", return_value={"LIVE_FOR_YEAR": False}), \
+            patch("bot_setup.bot_setup.deduplicate_top_users", side_effect=lambda x: x), \
+            patch("bot_setup.bot_setup.build_daily_summary", return_value=([{"type": "section"}], False)), \
+            patch("bot_setup.bot_setup.build_yearly_intro_message", return_value="intro"), \
+            patch("bot_setup.bot_setup.post_message"), \
+            patch("bot_setup.config.save_json"):
         result = run_setup(_base_config())
 
     assert result is not None
@@ -42,23 +42,23 @@ def test_bot_runs_end_to_end_mock_mode():
 
 @pytest.mark.integration
 def test_bot_go_live_posts_intro_and_summary():
-    from bot_setup import run_setup
+    from bot_setup.bot_setup import run_setup
 
     games = [{"id": "g1", "home": "Duke", "away": "UNC", "home_score": 80, "away_score": 75}]
     top = ["Alice (100)", "Bob (90)", "Carol (80)"]
 
-    with patch("bot_setup.get_input_safe", side_effect=["cli", "yes"]), \
-            patch("bot_setup.ensure_cbs_login"), \
-            patch("bot_setup.get_top_n_async"), \
-            patch("bot_setup.run_async", return_value=top), \
-            patch("bot_setup.get_final_games", return_value=games), \
-            patch("bot_setup.ask_if_missing", side_effect=lambda c, k, *a, **kw: c), \
-            patch("bot_setup.load_flag", return_value={"LIVE_FOR_YEAR": False}), \
-            patch("bot_setup.deduplicate_top_users", side_effect=lambda x: x), \
-            patch("bot_setup.build_daily_summary", return_value=([{"type": "section"}], False)), \
-            patch("bot_setup.build_yearly_intro_message", return_value="intro"), \
-            patch("bot_setup.post_message") as mock_post, \
-            patch("config.save_json"):
+    with patch("bot_setup.bot_setup.get_input_safe", side_effect=["cli", "yes"]), \
+            patch("bot_setup.bot_setup.ensure_cbs_login"), \
+            patch("bot_setup.bot_setup.get_top_n_async"), \
+            patch("bot_setup.bot_setup.run_async", return_value=top), \
+            patch("bot_setup.bot_setup.get_final_games", return_value=games), \
+            patch("bot_setup.bot_setup.ask_if_missing", side_effect=lambda c, k, *a, **kw: c), \
+            patch("bot_setup.bot_setup.load_flag", return_value={"LIVE_FOR_YEAR": False}), \
+            patch("bot_setup.bot_setup.deduplicate_top_users", side_effect=lambda x: x), \
+            patch("bot_setup.bot_setup.build_daily_summary", return_value=([{"type": "section"}], False)), \
+            patch("bot_setup.bot_setup.build_yearly_intro_message", return_value="intro"), \
+            patch("bot_setup.bot_setup.post_message") as mock_post, \
+            patch("bot_setup.config.save_json"):
         run_setup(_base_config())
 
     assert mock_post.call_count >= 2
@@ -66,20 +66,20 @@ def test_bot_go_live_posts_intro_and_summary():
 
 @pytest.mark.integration
 def test_bot_off_day_skips_summary_post():
-    from bot_setup import run_setup
+    from bot_setup.bot_setup import run_setup
 
-    with patch("bot_setup.get_input_safe", side_effect=["cli", "n"]), \
-            patch("bot_setup.ensure_cbs_login"), \
-            patch("bot_setup.get_top_n_async"), \
-            patch("bot_setup.run_async", return_value=[]), \
-            patch("bot_setup.get_final_games", return_value=[]), \
-            patch("bot_setup.ask_if_missing", side_effect=lambda c, k, *a, **kw: c), \
-            patch("bot_setup.load_flag", return_value={"LIVE_FOR_YEAR": False}), \
-            patch("bot_setup.deduplicate_top_users", side_effect=lambda x: x), \
-            patch("bot_setup.build_daily_summary", return_value=([{"type": "section"}], True)), \
-            patch("bot_setup.build_yearly_intro_message", return_value="intro"), \
-            patch("bot_setup.post_message") as mock_post, \
-            patch("config.save_json"):
+    with patch("bot_setup.bot_setup.get_input_safe", side_effect=["cli", "n"]), \
+            patch("bot_setup.bot_setup.ensure_cbs_login"), \
+            patch("bot_setup.bot_setup.get_top_n_async"), \
+            patch("bot_setup.bot_setup.run_async", return_value=[]), \
+            patch("bot_setup.bot_setup.get_final_games", return_value=[]), \
+            patch("bot_setup.bot_setup.ask_if_missing", side_effect=lambda c, k, *a, **kw: c), \
+            patch("bot_setup.bot_setup.load_flag", return_value={"LIVE_FOR_YEAR": False}), \
+            patch("bot_setup.bot_setup.deduplicate_top_users", side_effect=lambda x: x), \
+            patch("bot_setup.bot_setup.build_daily_summary", return_value=([{"type": "section"}], True)), \
+            patch("bot_setup.bot_setup.build_yearly_intro_message", return_value="intro"), \
+            patch("bot_setup.bot_setup.post_message") as mock_post, \
+            patch("bot_setup.config.save_json"):
         run_setup(_base_config())
 
     calls = [str(c) for c in mock_post.call_args_list]
@@ -88,20 +88,20 @@ def test_bot_off_day_skips_summary_post():
 
 @pytest.mark.integration
 def test_bot_already_live_skips_go_live_prompt():
-    from bot_setup import run_setup
+    from bot_setup.bot_setup import run_setup
 
-    with patch("bot_setup.get_input_safe", return_value="cli"), \
-            patch("bot_setup.ensure_cbs_login"), \
-            patch("bot_setup.get_top_n_async"), \
-            patch("bot_setup.run_async", return_value=[]), \
-            patch("bot_setup.get_final_games", return_value=[]), \
-            patch("bot_setup.ask_if_missing", side_effect=lambda c, k, *a, **kw: c), \
-            patch("bot_setup.load_flag", return_value={"LIVE_FOR_YEAR": True}), \
-            patch("bot_setup.deduplicate_top_users", side_effect=lambda x: x), \
-            patch("bot_setup.build_daily_summary", return_value=([{"type": "section"}], False)), \
-            patch("bot_setup.build_yearly_intro_message", return_value="intro"), \
-            patch("bot_setup.post_message"), \
-            patch("config.save_json"):
+    with patch("bot_setup.bot_setup.get_input_safe", return_value="cli"), \
+            patch("bot_setup.bot_setup.ensure_cbs_login"), \
+            patch("bot_setup.bot_setup.get_top_n_async"), \
+            patch("bot_setup.bot_setup.run_async", return_value=[]), \
+            patch("bot_setup.bot_setup.get_final_games", return_value=[]), \
+            patch("bot_setup.bot_setup.ask_if_missing", side_effect=lambda c, k, *a, **kw: c), \
+            patch("bot_setup.bot_setup.load_flag", return_value={"LIVE_FOR_YEAR": True}), \
+            patch("bot_setup.bot_setup.deduplicate_top_users", side_effect=lambda x: x), \
+            patch("bot_setup.bot_setup.build_daily_summary", return_value=([{"type": "section"}], False)), \
+            patch("bot_setup.bot_setup.build_yearly_intro_message", return_value="intro"), \
+            patch("bot_setup.bot_setup.post_message"), \
+            patch("bot_setup.config.save_json"):
         result = run_setup(_base_config())
 
     assert result is not None
@@ -109,11 +109,11 @@ def test_bot_already_live_skips_go_live_prompt():
 
 @pytest.mark.integration
 def test_bot_missing_pools_returns_early(capsys):
-    from bot_setup import run_setup
+    from bot_setup.bot_setup import run_setup
 
-    with patch("bot_setup.get_input_safe", return_value="cli"), \
-            patch("bot_setup.ask_if_missing", side_effect=lambda c, k, *a, **kw: c), \
-            patch("config.save_json"):
+    with patch("bot_setup.bot_setup.get_input_safe", return_value="cli"), \
+            patch("bot_setup.bot_setup.ask_if_missing", side_effect=lambda c, k, *a, **kw: c), \
+            patch("bot_setup.config.save_json"):
         run_setup(_base_config(POOLS=[]))
 
     assert "[ERROR]" in capsys.readouterr().out
@@ -121,20 +121,20 @@ def test_bot_missing_pools_returns_early(capsys):
 
 @pytest.mark.integration
 def test_bot_scraping_failure_falls_back_to_manual_top():
-    from bot_setup import run_setup
+    from bot_setup.bot_setup import run_setup
 
-    with patch("bot_setup.get_input_safe", side_effect=["cli", "manual", "n"]), \
-            patch("bot_setup.ensure_cbs_login"), \
-            patch("bot_setup.get_top_n_async"), \
-            patch("bot_setup.get_final_games", return_value=[]), \
-            patch("bot_setup.run_async", side_effect=Exception("scrape failed")), \
-            patch("bot_setup.ask_if_missing", side_effect=lambda c, k, *a, **kw: c), \
-            patch("bot_setup.load_flag", return_value={"LIVE_FOR_YEAR": False}), \
-            patch("bot_setup.deduplicate_top_users", side_effect=lambda x: x), \
-            patch("bot_setup.build_daily_summary", return_value=([{"type": "section"}], False)), \
-            patch("bot_setup.build_yearly_intro_message", return_value="intro"), \
-            patch("bot_setup.post_message"), \
-            patch("config.save_json"):
+    with patch("bot_setup.bot_setup.get_input_safe", side_effect=["cli", "manual", "n"]), \
+            patch("bot_setup.bot_setup.ensure_cbs_login"), \
+            patch("bot_setup.bot_setup.get_top_n_async"), \
+            patch("bot_setup.bot_setup.get_final_games", return_value=[]), \
+            patch("bot_setup.bot_setup.run_async", side_effect=Exception("scrape failed")), \
+            patch("bot_setup.bot_setup.ask_if_missing", side_effect=lambda c, k, *a, **kw: c), \
+            patch("bot_setup.bot_setup.load_flag", return_value={"LIVE_FOR_YEAR": False}), \
+            patch("bot_setup.bot_setup.deduplicate_top_users", side_effect=lambda x: x), \
+            patch("bot_setup.bot_setup.build_daily_summary", return_value=([{"type": "section"}], False)), \
+            patch("bot_setup.bot_setup.build_yearly_intro_message", return_value="intro"), \
+            patch("bot_setup.bot_setup.post_message"), \
+            patch("bot_setup.config.save_json"):
         result = run_setup(_base_config())
 
     assert result is not None
@@ -142,23 +142,23 @@ def test_bot_scraping_failure_falls_back_to_manual_top():
 
 @pytest.mark.integration
 def test_bot_with_webhook_uses_real_post_path():
-    from bot_setup import run_setup
+    from bot_setup.bot_setup import run_setup
 
     config = _base_config(SLACK_WEBHOOK_URL="https://hooks.slack.com/fake", MOCK_SLACK=False)
     top = ["Alice (100)", "Bob (90)", "Carol (80)"]
 
-    with patch("bot_setup.get_input_safe", side_effect=["cli", "yes"]), \
-            patch("bot_setup.ensure_cbs_login"), \
-            patch("bot_setup.get_top_n_async"), \
-            patch("bot_setup.run_async", return_value=top), \
-            patch("bot_setup.get_final_games", return_value=[]), \
-            patch("bot_setup.ask_if_missing", side_effect=lambda c, k, *a, **kw: c), \
-            patch("bot_setup.load_flag", return_value={"LIVE_FOR_YEAR": False}), \
-            patch("bot_setup.deduplicate_top_users", side_effect=lambda x: x), \
-            patch("bot_setup.build_daily_summary", return_value=([{"type": "section"}], False)), \
-            patch("bot_setup.build_yearly_intro_message", return_value="intro"), \
-            patch("bot_setup.post_message") as mock_post, \
-            patch("config.save_json"):
+    with patch("bot_setup.bot_setup.get_input_safe", side_effect=["cli", "yes"]), \
+            patch("bot_setup.bot_setup.ensure_cbs_login"), \
+            patch("bot_setup.bot_setup.get_top_n_async"), \
+            patch("bot_setup.bot_setup.run_async", return_value=top), \
+            patch("bot_setup.bot_setup.get_final_games", return_value=[]), \
+            patch("bot_setup.bot_setup.ask_if_missing", side_effect=lambda c, k, *a, **kw: c), \
+            patch("bot_setup.bot_setup.load_flag", return_value={"LIVE_FOR_YEAR": False}), \
+            patch("bot_setup.bot_setup.deduplicate_top_users", side_effect=lambda x: x), \
+            patch("bot_setup.bot_setup.build_daily_summary", return_value=([{"type": "section"}], False)), \
+            patch("bot_setup.bot_setup.build_yearly_intro_message", return_value="intro"), \
+            patch("bot_setup.bot_setup.post_message") as mock_post, \
+            patch("bot_setup.config.save_json"):
         run_setup(config)
 
     assert mock_post.called
@@ -166,20 +166,20 @@ def test_bot_with_webhook_uses_real_post_path():
 
 @pytest.mark.integration
 def test_bot_setup_does_not_open_browser_in_tests():
-    from bot_setup import run_setup
+    from bot_setup.bot_setup import run_setup
 
-    with patch("bot_setup.get_input_safe", side_effect=["cli", "n"]), \
-            patch("bot_setup.ensure_cbs_login") as mock_login, \
-            patch("bot_setup.get_top_n_async"), \
-            patch("bot_setup.run_async", return_value=[]), \
-            patch("bot_setup.get_final_games", return_value=[]), \
-            patch("bot_setup.ask_if_missing", side_effect=lambda c, k, *a, **kw: c), \
-            patch("bot_setup.load_flag", return_value={"LIVE_FOR_YEAR": False}), \
-            patch("bot_setup.deduplicate_top_users", side_effect=lambda x: x), \
-            patch("bot_setup.build_daily_summary", return_value=([{"type": "section"}], False)), \
-            patch("bot_setup.build_yearly_intro_message", return_value="intro"), \
-            patch("bot_setup.post_message"), \
-            patch("config.save_json"):
+    with patch("bot_setup.bot_setup.get_input_safe", side_effect=["cli", "n"]), \
+            patch("bot_setup.bot_setup.ensure_cbs_login") as mock_login, \
+            patch("bot_setup.bot_setup.get_top_n_async"), \
+            patch("bot_setup.bot_setup.run_async", return_value=[]), \
+            patch("bot_setup.bot_setup.get_final_games", return_value=[]), \
+            patch("bot_setup.bot_setup.ask_if_missing", side_effect=lambda c, k, *a, **kw: c), \
+            patch("bot_setup.bot_setup.load_flag", return_value={"LIVE_FOR_YEAR": False}), \
+            patch("bot_setup.bot_setup.deduplicate_top_users", side_effect=lambda x: x), \
+            patch("bot_setup.bot_setup.build_daily_summary", return_value=([{"type": "section"}], False)), \
+            patch("bot_setup.bot_setup.build_yearly_intro_message", return_value="intro"), \
+            patch("bot_setup.bot_setup.post_message"), \
+            patch("bot_setup.config.save_json"):
         run_setup(_base_config())
 
     assert mock_login.called
@@ -187,20 +187,20 @@ def test_bot_setup_does_not_open_browser_in_tests():
 
 @pytest.mark.integration
 def test_bot_go_live_no_skips_summary_on_off_day():
-    from bot_setup import run_setup
+    from bot_setup.bot_setup import run_setup
 
-    with patch("bot_setup.get_input_safe", side_effect=["cli", "yes"]), \
-            patch("bot_setup.ensure_cbs_login"), \
-            patch("bot_setup.get_top_n_async"), \
-            patch("bot_setup.run_async", return_value=[]), \
-            patch("bot_setup.get_final_games", return_value=[]), \
-            patch("bot_setup.ask_if_missing", side_effect=lambda c, k, *a, **kw: c), \
-            patch("bot_setup.load_flag", return_value={"LIVE_FOR_YEAR": False}), \
-            patch("bot_setup.deduplicate_top_users", side_effect=lambda x: x), \
-            patch("bot_setup.build_daily_summary", return_value=([{"type": "section"}], True)), \
-            patch("bot_setup.build_yearly_intro_message", return_value="intro"), \
-            patch("bot_setup.post_message") as mock_post, \
-            patch("config.save_json"):
+    with patch("bot_setup.bot_setup.get_input_safe", side_effect=["cli", "yes"]), \
+            patch("bot_setup.bot_setup.ensure_cbs_login"), \
+            patch("bot_setup.bot_setup.get_top_n_async"), \
+            patch("bot_setup.bot_setup.run_async", return_value=[]), \
+            patch("bot_setup.bot_setup.get_final_games", return_value=[]), \
+            patch("bot_setup.bot_setup.ask_if_missing", side_effect=lambda c, k, *a, **kw: c), \
+            patch("bot_setup.bot_setup.load_flag", return_value={"LIVE_FOR_YEAR": False}), \
+            patch("bot_setup.bot_setup.deduplicate_top_users", side_effect=lambda x: x), \
+            patch("bot_setup.bot_setup.build_daily_summary", return_value=([{"type": "section"}], True)), \
+            patch("bot_setup.bot_setup.build_yearly_intro_message", return_value="intro"), \
+            patch("bot_setup.bot_setup.post_message") as mock_post, \
+            patch("bot_setup.config.save_json"):
         run_setup(_base_config())
 
     assert mock_post.call_count == 1
@@ -210,20 +210,20 @@ def test_bot_go_live_no_skips_summary_on_off_day():
 
 @pytest.mark.integration
 def test_bot_go_live_skipped_does_not_post_anything():
-    from bot_setup import run_setup
+    from bot_setup.bot_setup import run_setup
 
-    with patch("bot_setup.get_input_safe", side_effect=["cli", "n"]), \
-            patch("bot_setup.ensure_cbs_login"), \
-            patch("bot_setup.get_top_n_async"), \
-            patch("bot_setup.run_async", return_value=[]), \
-            patch("bot_setup.get_final_games", return_value=[]), \
-            patch("bot_setup.ask_if_missing", side_effect=lambda c, k, *a, **kw: c), \
-            patch("bot_setup.load_flag", return_value={"LIVE_FOR_YEAR": False}), \
-            patch("bot_setup.deduplicate_top_users", side_effect=lambda x: x), \
-            patch("bot_setup.build_daily_summary", return_value=([{"type": "section"}], False)), \
-            patch("bot_setup.build_yearly_intro_message", return_value="intro"), \
-            patch("bot_setup.post_message") as mock_post, \
-            patch("config.save_json"):
+    with patch("bot_setup.bot_setup.get_input_safe", side_effect=["cli", "n"]), \
+            patch("bot_setup.bot_setup.ensure_cbs_login"), \
+            patch("bot_setup.bot_setup.get_top_n_async"), \
+            patch("bot_setup.bot_setup.run_async", return_value=[]), \
+            patch("bot_setup.bot_setup.get_final_games", return_value=[]), \
+            patch("bot_setup.bot_setup.ask_if_missing", side_effect=lambda c, k, *a, **kw: c), \
+            patch("bot_setup.bot_setup.load_flag", return_value={"LIVE_FOR_YEAR": False}), \
+            patch("bot_setup.bot_setup.deduplicate_top_users", side_effect=lambda x: x), \
+            patch("bot_setup.bot_setup.build_daily_summary", return_value=([{"type": "section"}], False)), \
+            patch("bot_setup.bot_setup.build_yearly_intro_message", return_value="intro"), \
+            patch("bot_setup.bot_setup.post_message") as mock_post, \
+            patch("bot_setup.config.save_json"):
         run_setup(_base_config())
 
     assert mock_post.call_count == 0
@@ -231,20 +231,20 @@ def test_bot_go_live_skipped_does_not_post_anything():
 
 @pytest.mark.integration
 def test_bot_returns_six_tuple():
-    from bot_setup import run_setup
+    from bot_setup.bot_setup import run_setup
 
-    with patch("bot_setup.get_input_safe", side_effect=["cli", "n"]), \
-            patch("bot_setup.ensure_cbs_login"), \
-            patch("bot_setup.get_top_n_async"), \
-            patch("bot_setup.run_async", return_value=[]), \
-            patch("bot_setup.get_final_games", return_value=[]), \
-            patch("bot_setup.ask_if_missing", side_effect=lambda c, k, *a, **kw: c), \
-            patch("bot_setup.load_flag", return_value={"LIVE_FOR_YEAR": False}), \
-            patch("bot_setup.deduplicate_top_users", side_effect=lambda x: x), \
-            patch("bot_setup.build_daily_summary", return_value=([{"type": "section"}], False)), \
-            patch("bot_setup.build_yearly_intro_message", return_value="intro"), \
-            patch("bot_setup.post_message"), \
-            patch("config.save_json"):
+    with patch("bot_setup.bot_setup.get_input_safe", side_effect=["cli", "n"]), \
+            patch("bot_setup.bot_setup.ensure_cbs_login"), \
+            patch("bot_setup.bot_setup.get_top_n_async"), \
+            patch("bot_setup.bot_setup.run_async", return_value=[]), \
+            patch("bot_setup.bot_setup.get_final_games", return_value=[]), \
+            patch("bot_setup.bot_setup.ask_if_missing", side_effect=lambda c, k, *a, **kw: c), \
+            patch("bot_setup.bot_setup.load_flag", return_value={"LIVE_FOR_YEAR": False}), \
+            patch("bot_setup.bot_setup.deduplicate_top_users", side_effect=lambda x: x), \
+            patch("bot_setup.bot_setup.build_daily_summary", return_value=([{"type": "section"}], False)), \
+            patch("bot_setup.bot_setup.build_yearly_intro_message", return_value="intro"), \
+            patch("bot_setup.bot_setup.post_message"), \
+            patch("bot_setup.config.save_json"):
         result = run_setup(_base_config())
 
     assert isinstance(result, tuple)
@@ -253,22 +253,22 @@ def test_bot_returns_six_tuple():
 
 @pytest.mark.integration
 def test_bot_already_live_still_posts_summary():
-    from bot_setup import run_setup
+    from bot_setup.bot_setup import run_setup
 
     games = [{"id": "g1", "home": "Duke", "away": "UNC", "home_score": 80, "away_score": 75}]
 
-    with patch("bot_setup.get_input_safe", return_value="cli"), \
-            patch("bot_setup.ensure_cbs_login"), \
-            patch("bot_setup.get_top_n_async"), \
-            patch("bot_setup.run_async", return_value=[]), \
-            patch("bot_setup.get_final_games", return_value=games), \
-            patch("bot_setup.ask_if_missing", side_effect=lambda c, k, *a, **kw: c), \
-            patch("bot_setup.load_flag", return_value={"LIVE_FOR_YEAR": True}), \
-            patch("bot_setup.deduplicate_top_users", side_effect=lambda x: x), \
-            patch("bot_setup.build_daily_summary", return_value=([{"type": "section"}], False)), \
-            patch("bot_setup.build_yearly_intro_message", return_value="intro"), \
-            patch("bot_setup.post_message"), \
-            patch("config.save_json"):
+    with patch("bot_setup.bot_setup.get_input_safe", return_value="cli"), \
+            patch("bot_setup.bot_setup.ensure_cbs_login"), \
+            patch("bot_setup.bot_setup.get_top_n_async"), \
+            patch("bot_setup.bot_setup.run_async", return_value=[]), \
+            patch("bot_setup.bot_setup.get_final_games", return_value=games), \
+            patch("bot_setup.bot_setup.ask_if_missing", side_effect=lambda c, k, *a, **kw: c), \
+            patch("bot_setup.bot_setup.load_flag", return_value={"LIVE_FOR_YEAR": True}), \
+            patch("bot_setup.bot_setup.deduplicate_top_users", side_effect=lambda x: x), \
+            patch("bot_setup.bot_setup.build_daily_summary", return_value=([{"type": "section"}], False)), \
+            patch("bot_setup.bot_setup.build_yearly_intro_message", return_value="intro"), \
+            patch("bot_setup.bot_setup.post_message"), \
+            patch("bot_setup.config.save_json"):
         config, method, men_games, women_games, top_men, top_women = run_setup(_base_config())
 
     assert men_games == games

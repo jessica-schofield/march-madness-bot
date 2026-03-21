@@ -53,22 +53,22 @@ def _all_text(blocks):
 # ---------------------------------------------------------------------------
 
 def test_is_upset_lower_seed_wins_home():
-    from messages import is_upset
+    from slack_bot.messages import is_upset
     assert is_upset(80, 70, 8, 1) is True
 
 
 def test_is_upset_lower_seed_wins_away():
-    from messages import is_upset
+    from slack_bot.messages import is_upset
     assert is_upset(70, 80, 2, 10) is True
 
 
 def test_is_upset_favourite_wins():
-    from messages import is_upset
+    from slack_bot.messages import is_upset
     assert is_upset(80, 70, 1, 8) is False
 
 
 def test_is_upset_equal_seeds():
-    from messages import is_upset
+    from slack_bot.messages import is_upset
     assert is_upset(80, 70, 4, 4) is False
 
 
@@ -77,12 +77,12 @@ def test_is_upset_equal_seeds():
     (0, 5),
 ])
 def test_is_upset_invalid_seeds_return_false(home_seed, away_seed):
-    from messages import is_upset
+    from slack_bot.messages import is_upset
     assert is_upset(80, 70, home_seed, away_seed) is False
 
 
 def test_is_upset_invalid_seed_string_returns_false():
-    from messages import is_upset
+    from slack_bot.messages import is_upset
     assert is_upset(80, 70, "one", "eight") is False
 
 
@@ -94,7 +94,7 @@ def test_is_upset_invalid_seed_string_returns_false():
     (80, 70, "9",  "10", False),  # 9 is higher seed, wins — not upset
 ])
 def test_is_upset_string_seeds(home_score, away_score, home_seed, away_seed, expected):
-    from messages import is_upset
+    from slack_bot.messages import is_upset
     assert is_upset(home_score, away_score, home_seed, away_seed) is expected
 
 
@@ -103,19 +103,19 @@ def test_is_upset_string_seeds(home_score, away_score, home_seed, away_seed, exp
 # ---------------------------------------------------------------------------
 
 def test_format_leaderboard_empty():
-    from messages import format_leaderboard
+    from slack_bot.messages import format_leaderboard
     assert format_leaderboard([]) == "_No data yet_"
 
 
 def test_format_leaderboard_single_entry():
-    from messages import format_leaderboard
+    from slack_bot.messages import format_leaderboard
     result = format_leaderboard(["Alice (100 pts)"])
     assert "Alice" in result
     assert "1." in result
 
 
 def test_format_leaderboard_sequential_ranks():
-    from messages import format_leaderboard
+    from slack_bot.messages import format_leaderboard
     entries = ["Alice (100 pts)", "Bob (90 pts)", "Carol (80 pts)"]
     lines = format_leaderboard(entries).splitlines()
     assert lines[0].startswith("1.")
@@ -124,7 +124,7 @@ def test_format_leaderboard_sequential_ranks():
 
 
 def test_format_leaderboard_tied_players_share_rank():
-    from messages import format_leaderboard
+    from slack_bot.messages import format_leaderboard
     entries = ["Alice (100 pts)", "Bob (100 pts)", "Carol (80 pts)"]
     lines = format_leaderboard(entries).splitlines()
     assert lines[0].startswith("1.")
@@ -142,7 +142,7 @@ def test_format_leaderboard_tied_players_share_rank():
     ("no points here",  None),
 ])
 def test_parse_pts(entry, expected):
-    from messages import parse_pts
+    from slack_bot.messages import parse_pts
     assert parse_pts(entry) == expected
 
 
@@ -151,7 +151,7 @@ def test_parse_pts(entry, expected):
 # ---------------------------------------------------------------------------
 
 def test_calculate_movers_returns_biggest_riser():
-    from messages import calculate_movers
+    from slack_bot.messages import calculate_movers
     old = ["Alice (100 pts)", "Bob (90 pts)"]
     new = ["Alice (120 pts)", "Bob (95 pts)"]
     result = calculate_movers(new, old)
@@ -160,7 +160,7 @@ def test_calculate_movers_returns_biggest_riser():
 
 
 def test_calculate_movers_picks_largest_gain():
-    from messages import calculate_movers
+    from slack_bot.messages import calculate_movers
     old = ["Alice (100 pts)", "Bob (100 pts)"]
     new = ["Alice (110 pts)", "Bob (130 pts)"]
     result = calculate_movers(new, old)
@@ -174,12 +174,12 @@ def test_calculate_movers_picks_largest_gain():
     ([], ["Alice (100 pts)"]),   # empty new
 ])
 def test_calculate_movers_returns_none(new, old):
-    from messages import calculate_movers
+    from slack_bot.messages import calculate_movers
     assert calculate_movers(new, old) is None
 
 
 def test_calculate_movers_new_user_not_in_old_ignored():
-    from messages import calculate_movers
+    from slack_bot.messages import calculate_movers
     old = ["Alice (100 pts)"]
     new = ["Alice (100 pts)", "NewPerson (50 pts)"]
     # Alice unchanged, NewPerson has no baseline — expect None
@@ -190,10 +190,10 @@ def test_calculate_movers_new_user_not_in_old_ignored():
 # build_daily_summary
 # ---------------------------------------------------------------------------
 
-@patch("messages.save_json")
-@patch("messages.load_json", return_value=_EMPTY_RANKINGS)
+@patch("slack_bot.messages.save_json")
+@patch("slack_bot.messages.load_json", return_value=_EMPTY_RANKINGS)
 def test_build_daily_summary_returns_tuple(mock_load, mock_save):
-    from messages import build_daily_summary
+    from slack_bot.messages import build_daily_summary
     blocks, no_games = build_daily_summary([], [], [], [])
     assert isinstance(blocks, list)
     assert isinstance(no_games, bool)
@@ -203,27 +203,27 @@ def test_build_daily_summary_returns_tuple(mock_load, mock_save):
     ([], [],       True),
     ([_game()], [], False),
 ])
-@patch("messages.save_json")
-@patch("messages.load_json", return_value=_EMPTY_RANKINGS)
+@patch("slack_bot.messages.save_json")
+@patch("slack_bot.messages.load_json", return_value=_EMPTY_RANKINGS)
 def test_build_daily_summary_no_games_flag(mock_load, mock_save, men_games, women_games, expected_no_games):
-    from messages import build_daily_summary
+    from slack_bot.messages import build_daily_summary
     _, no_games = build_daily_summary(men_games, women_games, [], [])
     assert no_games is expected_no_games
 
 
-@patch("messages.save_json")
-@patch("messages.load_json", return_value=_EMPTY_RANKINGS)
+@patch("slack_bot.messages.save_json")
+@patch("slack_bot.messages.load_json", return_value=_EMPTY_RANKINGS)
 def test_build_daily_summary_off_day_message(mock_load, mock_save):
-    from messages import build_daily_summary
+    from slack_bot.messages import build_daily_summary
     blocks, _ = build_daily_summary([], [], [], [])
     text = _all_text(blocks).lower()
     assert "no games" in text or "rest day" in text
 
 
-@patch("messages.save_json")
-@patch("messages.load_json", return_value=_EMPTY_RANKINGS)
+@patch("slack_bot.messages.save_json")
+@patch("slack_bot.messages.load_json", return_value=_EMPTY_RANKINGS)
 def test_build_daily_summary_includes_leaderboard(mock_load, mock_save):
-    from messages import build_daily_summary
+    from slack_bot.messages import build_daily_summary
     top_men = ["Alice (100 pts)", "Bob (90 pts)"]
     blocks, _ = build_daily_summary([], [], top_men, [], top_n=5)
     text = _all_text(blocks)
@@ -231,45 +231,45 @@ def test_build_daily_summary_includes_leaderboard(mock_load, mock_save):
     assert "Bob" in text
 
 
-@patch("messages.save_json")
-@patch("messages.load_json", return_value=_EMPTY_RANKINGS)
+@patch("slack_bot.messages.save_json")
+@patch("slack_bot.messages.load_json", return_value=_EMPTY_RANKINGS)
 def test_build_daily_summary_upset_marker(mock_load, mock_save):
-    from messages import build_daily_summary
+    from slack_bot.messages import build_daily_summary
     game = _game(home_score=70, away_score=80, home_seed=1, away_seed=10)
     blocks, _ = build_daily_summary([game], [], [], [])
     text = _all_text(blocks)
     assert "⚡" in text or "🔥" in text
 
 
-@patch("messages.save_json")
-@patch("messages.load_json", return_value=_EMPTY_RANKINGS)
+@patch("slack_bot.messages.save_json")
+@patch("slack_bot.messages.load_json", return_value=_EMPTY_RANKINGS)
 def test_build_daily_summary_men_url_linked(mock_load, mock_save):
-    from messages import build_daily_summary
+    from slack_bot.messages import build_daily_summary
     blocks, _ = build_daily_summary([], [], ["Alice (100 pts)"], [],
                                     men_url="https://example.com/men")
     assert "https://example.com/men" in _all_text(blocks)
 
 
-@patch("messages.save_json")
-@patch("messages.load_json", return_value={"men": ["Alice (80 pts)"], "women": []})
+@patch("slack_bot.messages.save_json")
+@patch("slack_bot.messages.load_json", return_value={"men": ["Alice (80 pts)"], "women": []})
 def test_build_daily_summary_shows_movers(mock_load, mock_save):
-    from messages import build_daily_summary
+    from slack_bot.messages import build_daily_summary
     blocks, _ = build_daily_summary([], [], ["Alice (100 pts)"], [])
     assert "Alice" in _all_text(blocks)
 
 
-@patch("messages.save_json")
-@patch("messages.load_json", return_value=_EMPTY_RANKINGS)
+@patch("slack_bot.messages.save_json")
+@patch("slack_bot.messages.load_json", return_value=_EMPTY_RANKINGS)
 def test_build_daily_summary_saves_rankings(mock_load, mock_save):
-    from messages import build_daily_summary
+    from slack_bot.messages import build_daily_summary
     build_daily_summary([], [], ["Alice (100 pts)"], [])
     assert mock_save.called
 
 
-@patch("messages.save_json")
-@patch("messages.load_json", return_value=_EMPTY_RANKINGS)
+@patch("slack_bot.messages.save_json")
+@patch("slack_bot.messages.load_json", return_value=_EMPTY_RANKINGS)
 def test_build_daily_summary_none_games_treated_as_empty(mock_load, mock_save):
-    from messages import build_daily_summary
+    from slack_bot.messages import build_daily_summary
     blocks, no_games = build_daily_summary(None, None, [], [])
     assert no_games is True
 
@@ -279,13 +279,13 @@ def test_build_daily_summary_none_games_treated_as_empty(mock_load, mock_save):
 # ---------------------------------------------------------------------------
 
 def test_build_yearly_intro_message_contains_top_n():
-    from messages import build_yearly_intro_message
+    from slack_bot.messages import build_yearly_intro_message
     result = build_yearly_intro_message(_config(TOP_N=7))
     assert "7" in result
 
 
 def test_build_yearly_intro_message_shows_all_pool_urls():
-    from messages import build_yearly_intro_message
+    from slack_bot.messages import build_yearly_intro_message
     result = build_yearly_intro_message(_config(POOLS=[
         {"MEN_URL": "https://cbs.com/men",  "WOMEN_URL": "https://cbs.com/women"},
         {"MEN_URL": "https://espn.com/men", "WOMEN_URL": ""},
@@ -295,7 +295,7 @@ def test_build_yearly_intro_message_shows_all_pool_urls():
 
 
 def test_build_yearly_intro_message_no_url_shows_placeholder():
-    from messages import build_yearly_intro_message
+    from slack_bot.messages import build_yearly_intro_message
     result = build_yearly_intro_message(_config(SEND_GAME_UPDATES=False)).lower()
     assert "no url" in result
 
@@ -305,25 +305,25 @@ def test_build_yearly_intro_message_no_url_shows_placeholder():
     # missing key handled in next test
 ])
 def test_build_yearly_intro_message_empty_pools(pools):
-    from messages import build_yearly_intro_message
+    from slack_bot.messages import build_yearly_intro_message
     result = build_yearly_intro_message(_config(POOLS=pools)).lower()
     assert "no pools" in result or "no pools configured" in result
 
 
 def test_build_yearly_intro_message_missing_pools_key():
-    from messages import build_yearly_intro_message
+    from slack_bot.messages import build_yearly_intro_message
     config = {k: v for k, v in _BASE_CONFIG.items() if k != "POOLS"}
     result = build_yearly_intro_message(config)
     assert isinstance(result, str)
 
 
 def test_build_yearly_intro_message_weekends_on():
-    from messages import build_yearly_intro_message
+    from slack_bot.messages import build_yearly_intro_message
     result = build_yearly_intro_message(_config(POST_WEEKENDS=True)).lower()
     assert "yes" in result
 
 
 def test_build_yearly_intro_message_game_updates_off():
-    from messages import build_yearly_intro_message
+    from slack_bot.messages import build_yearly_intro_message
     result = build_yearly_intro_message(_config(SEND_GAME_UPDATES=False)).lower()
     assert "off" in result

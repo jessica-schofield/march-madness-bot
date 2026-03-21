@@ -20,7 +20,7 @@ def _make_response(data: dict, status: int = 200):
 
 def test_ping_live_counter_no_url_is_noop():
     """If LIVE_COUNTER_URL is not set, function returns immediately."""
-    from bot_setup import _ping_live_counter
+    from bot_setup.bot_setup import _ping_live_counter
     with patch("urllib.request.urlopen") as mock_open:
         _ping_live_counter({"LIVE_COUNTER_URL": ""})
     mock_open.assert_not_called()
@@ -28,7 +28,7 @@ def test_ping_live_counter_no_url_is_noop():
 
 def test_ping_live_counter_success(capsys):
     """Successful ping prints live bot count."""
-    from bot_setup import _ping_live_counter
+    from bot_setup.bot_setup import _ping_live_counter
     response_data = {"total": 42, "thisYear": 7, "year": 2026}
 
     with patch("urllib.request.urlopen", return_value=_make_response(response_data)):
@@ -44,7 +44,7 @@ def test_ping_live_counter_success(capsys):
 
 def test_ping_live_counter_network_error_is_silent():
     """Network failure never raises — always fails silently."""
-    from bot_setup import _ping_live_counter
+    from bot_setup.bot_setup import _ping_live_counter
 
     with patch("urllib.request.urlopen", side_effect=OSError("network down")):
         _ping_live_counter({
@@ -55,7 +55,7 @@ def test_ping_live_counter_network_error_is_silent():
 
 def test_ping_live_counter_timeout_is_silent():
     """Timeout never raises — always fails silently."""
-    from bot_setup import _ping_live_counter
+    from bot_setup.bot_setup import _ping_live_counter
     import urllib.error
 
     with patch("urllib.request.urlopen", side_effect=TimeoutError("timed out")):
@@ -67,7 +67,7 @@ def test_ping_live_counter_timeout_is_silent():
 
 def test_ping_live_counter_bad_json_is_silent():
     """Malformed JSON response never raises."""
-    from bot_setup import _ping_live_counter
+    from bot_setup.bot_setup import _ping_live_counter
 
     mock_resp = MagicMock()
     mock_resp.read.return_value = b"not valid json {{{"
@@ -83,7 +83,7 @@ def test_ping_live_counter_bad_json_is_silent():
 
 def test_ping_live_counter_includes_year_and_version_in_url():
     """URL sent to counter includes year and version params."""
-    from bot_setup import _ping_live_counter
+    from bot_setup.bot_setup import _ping_live_counter
     import datetime
 
     year = datetime.datetime.now().year
@@ -131,23 +131,23 @@ def _live_counter_config(**overrides):
 @pytest.mark.integration
 def test_go_live_calls_ping_counter():
     """When go_live=True, _ping_live_counter is called once."""
-    from bot_setup import run_setup
+    from bot_setup.bot_setup import run_setup
 
     top = ["Alice (100)", "Bob (90)", "Carol (80)"]
 
-    with patch("bot_setup.get_input_safe", side_effect=["cli", "yes"]), \
-            patch("bot_setup.ensure_cbs_login"), \
-            patch("bot_setup.get_top_n_async"), \
-            patch("bot_setup.run_async", return_value=top), \
-            patch("bot_setup.get_final_games", return_value=[]), \
-            patch("bot_setup.ask_if_missing", side_effect=lambda c, k, *a, **kw: c), \
-            patch("bot_setup.load_flag", return_value={"LIVE_FOR_YEAR": False}), \
-            patch("bot_setup.deduplicate_top_users", side_effect=lambda x: x), \
-            patch("bot_setup.build_daily_summary", return_value=([{"type": "section"}], False)), \
-            patch("bot_setup.build_yearly_intro_message", return_value="intro"), \
-            patch("bot_setup.post_message"), \
-            patch("bot_setup._ping_live_counter") as mock_ping, \
-            patch("config.save_json"):
+    with patch("bot_setup.bot_setup.get_input_safe", side_effect=["cli", "yes"]), \
+            patch("bot_setup.bot_setup.ensure_cbs_login"), \
+            patch("bot_setup.bot_setup.get_top_n_async"), \
+            patch("bot_setup.bot_setup.run_async", return_value=top), \
+            patch("bot_setup.bot_setup.get_final_games", return_value=[]), \
+            patch("bot_setup.bot_setup.ask_if_missing", side_effect=lambda c, k, *a, **kw: c), \
+            patch("bot_setup.bot_setup.load_flag", return_value={"LIVE_FOR_YEAR": False}), \
+            patch("bot_setup.bot_setup.deduplicate_top_users", side_effect=lambda x: x), \
+            patch("bot_setup.bot_setup.build_daily_summary", return_value=([{"type": "section"}], False)), \
+            patch("bot_setup.bot_setup.build_yearly_intro_message", return_value="intro"), \
+            patch("bot_setup.bot_setup.post_message"), \
+            patch("bot_setup.bot_setup._ping_live_counter") as mock_ping, \
+            patch("bot_setup.config.save_json"):
         run_setup(_live_counter_config())
 
     mock_ping.assert_called_once()
@@ -156,21 +156,21 @@ def test_go_live_calls_ping_counter():
 @pytest.mark.integration
 def test_go_live_skipped_does_not_call_ping_counter():
     """When go_live=False, _ping_live_counter is never called."""
-    from bot_setup import run_setup
+    from bot_setup.bot_setup import run_setup
 
-    with patch("bot_setup.get_input_safe", side_effect=["cli", "n"]), \
-            patch("bot_setup.ensure_cbs_login"), \
-            patch("bot_setup.get_top_n_async"), \
-            patch("bot_setup.run_async", return_value=[]), \
-            patch("bot_setup.get_final_games", return_value=[]), \
-            patch("bot_setup.ask_if_missing", side_effect=lambda c, k, *a, **kw: c), \
-            patch("bot_setup.load_flag", return_value={"LIVE_FOR_YEAR": False}), \
-            patch("bot_setup.deduplicate_top_users", side_effect=lambda x: x), \
-            patch("bot_setup.build_daily_summary", return_value=([{"type": "section"}], False)), \
-            patch("bot_setup.build_yearly_intro_message", return_value="intro"), \
-            patch("bot_setup.post_message"), \
-            patch("bot_setup._ping_live_counter") as mock_ping, \
-            patch("config.save_json"):
+    with patch("bot_setup.bot_setup.get_input_safe", side_effect=["cli", "n"]), \
+            patch("bot_setup.bot_setup.ensure_cbs_login"), \
+            patch("bot_setup.bot_setup.get_top_n_async"), \
+            patch("bot_setup.bot_setup.run_async", return_value=[]), \
+            patch("bot_setup.bot_setup.get_final_games", return_value=[]), \
+            patch("bot_setup.bot_setup.ask_if_missing", side_effect=lambda c, k, *a, **kw: c), \
+            patch("bot_setup.bot_setup.load_flag", return_value={"LIVE_FOR_YEAR": False}), \
+            patch("bot_setup.bot_setup.deduplicate_top_users", side_effect=lambda x: x), \
+            patch("bot_setup.bot_setup.build_daily_summary", return_value=([{"type": "section"}], False)), \
+            patch("bot_setup.bot_setup.build_yearly_intro_message", return_value="intro"), \
+            patch("bot_setup.bot_setup.post_message"), \
+            patch("bot_setup.bot_setup._ping_live_counter") as mock_ping, \
+            patch("bot_setup.config.save_json"):
         run_setup(_live_counter_config())
 
     mock_ping.assert_not_called()

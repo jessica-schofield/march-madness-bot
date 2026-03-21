@@ -2,10 +2,9 @@ import json
 import datetime
 from pathlib import Path
 
-from config import YEARLY_FLAG_FILE  # ← add this import
+from bot_setup.config import YEARLY_FLAG_FILE
 
-FLAG_FILE = YEARLY_FLAG_FILE  # ← replace: FLAG_FILE = Path("yearly_flag.json")
-                               # or replace all FLAG_FILE usages with YEARLY_FLAG_FILE directly
+FLAG_FILE = YEARLY_FLAG_FILE
 
 
 def load_flag():

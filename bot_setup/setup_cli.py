@@ -5,7 +5,7 @@ Pure input/output utilities — no Playwright, CBS, or Slack DM dependencies.
 import sys
 from pathlib import Path
 
-from config import CONFIG_FILE, save_json
+from bot_setup.config import CONFIG_FILE, save_json
 
 SLACK_WEBHOOK_HELP = """
 📋 HOW TO GET YOUR SLACK WEBHOOK URL

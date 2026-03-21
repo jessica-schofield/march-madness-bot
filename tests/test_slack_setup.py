@@ -1,4 +1,4 @@
-import slack_setup
+from bot_setup import slack_setup
 from unittest.mock import patch
 import sys
 import os

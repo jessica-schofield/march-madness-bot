@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from cbs import (
+from sources.cbs import (
     _build_top_n,
     _extract_espn,
     _format_user,

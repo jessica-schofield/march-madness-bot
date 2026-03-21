@@ -65,18 +65,18 @@ def standard_run_setup_patches():
         load_flag_return = load_flag_return if load_flag_return is not None else {"LIVE_FOR_YEAR": False}
 
         mocks = {}
-        with patch("bot_setup.get_input_safe", side_effect=["cli", go_live]) as m1, \
-                patch("bot_setup.ensure_cbs_login") as m2, \
-                patch("bot_setup.get_top_n_async") as m3, \
-                patch("bot_setup.run_async", return_value=run_async_return) as m4, \
-                patch("bot_setup.get_final_games", return_value=games_return) as m5, \
-                patch("bot_setup.ask_if_missing", side_effect=lambda c, k, *a, **kw: c) as m6, \
-                patch("bot_setup.load_flag", return_value=load_flag_return) as m7, \
-                patch("bot_setup.deduplicate_top_users", side_effect=lambda x: x) as m8, \
-                patch("bot_setup.build_daily_summary", return_value=summary_return) as m9, \
-                patch("bot_setup.build_yearly_intro_message", return_value="intro") as m10, \
-                patch("bot_setup.post_message") as m11, \
-                patch("config.save_json") as m12:
+        with patch("bot_setup.bot_setup.get_input_safe", side_effect=["cli", go_live]) as m1, \
+                patch("bot_setup.bot_setup.ensure_cbs_login") as m2, \
+                patch("bot_setup.bot_setup.get_top_n_async") as m3, \
+                patch("bot_setup.bot_setup.run_async", return_value=run_async_return) as m4, \
+                patch("bot_setup.bot_setup.get_final_games", return_value=games_return) as m5, \
+                patch("bot_setup.bot_setup.ask_if_missing", side_effect=lambda c, k, *a, **kw: c) as m6, \
+                patch("bot_setup.bot_setup.load_flag", return_value=load_flag_return) as m7, \
+                patch("bot_setup.bot_setup.deduplicate_top_users", side_effect=lambda x: x) as m8, \
+                patch("bot_setup.bot_setup.build_daily_summary", return_value=summary_return) as m9, \
+                patch("bot_setup.bot_setup.build_yearly_intro_message", return_value="intro") as m10, \
+                patch("bot_setup.bot_setup.post_message") as m11, \
+                patch("bot_setup.config.save_json") as m12:
             mocks.update({
                 "get_input_safe": m1,
                 "ensure_cbs_login": m2,

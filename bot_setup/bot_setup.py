@@ -5,28 +5,27 @@ from pathlib import Path
 import urllib.request
 import urllib.parse
 
-from config import CONFIG_FILE, SEEN_FILE, YEARLY_FLAG_FILE, save_json  # ← add YEARLY_FLAG_FILE
-from espn import get_final_games
-from cbs import ensure_cbs_login, get_top_n_async, deduplicate_top_users
-from messages import build_daily_summary, build_yearly_intro_message
-from slack_utils import post_message
-from yearly_setup_reminder import load_flag, next_weekday_morning, needs_config_reminder
-from setup_cli import (
+from bot_setup.config import CONFIG_FILE, SEEN_FILE, YEARLY_FLAG_FILE, save_json
+from sources.espn import get_final_games
+from sources.cbs import ensure_cbs_login, get_top_n_async, deduplicate_top_users
+from slack_bot.messages import build_daily_summary, build_yearly_intro_message
+from slack_bot.slack_utils import post_message
+from status.yearly_setup_reminder import load_flag, next_weekday_morning
+from bot_setup.setup_cli import (
     get_input_safe, ask_if_missing, ask_slack_credentials_cli,
     get_missing_config_fields, TOURNAMENT_DATES_HELP
 )
 
-PLAYWRIGHT_HEADLESS = True  # headless by default; override via config["PLAYWRIGHT_HEADLESS"]
+PLAYWRIGHT_HEADLESS = True
 PLAYWRIGHT_STATE = "playwright_state.json"
 INCOMPLETE_CONFIG_FLAG = Path("incomplete_config.json")
+_MAX_BROWSER_RETRIES = 3
 
-# ⚠️ UPDATE EACH YEAR — or set via setup prompts, stored in config.json
 _DEFAULT_TOURNAMENT_END_MEN = datetime.date(2026, 4, 7)
 _DEFAULT_TOURNAMENT_END_WOMEN = datetime.date(2026, 4, 6)
 
 
 def _tournament_end(config, gender):
-    """Read tournament end date from config, fall back to module-level default."""
     key = "TOURNAMENT_END_MEN" if gender == "men's" else "TOURNAMENT_END_WOMEN"
     default = _DEFAULT_TOURNAMENT_END_MEN if gender == "men's" else _DEFAULT_TOURNAMENT_END_WOMEN
     raw = config.get(key)
@@ -39,7 +38,6 @@ def _tournament_end(config, gender):
 
 
 def schedule_incomplete_config_reminder():
-    """Save a flag to remind the user next weekday morning to finish config."""
     next_morning = next_weekday_morning()
     data = {"remind_at": next_morning.isoformat()}
     INCOMPLETE_CONFIG_FLAG.write_text(json.dumps(data, indent=2))
@@ -47,7 +45,6 @@ def schedule_incomplete_config_reminder():
 
 
 def check_incomplete_config_reminder():
-    """Called at startup — print a reminder if config is still incomplete and it's time."""
     if not INCOMPLETE_CONFIG_FLAG.exists():
         return
     try:
@@ -64,13 +61,11 @@ def check_incomplete_config_reminder():
 
 
 def clear_incomplete_config_reminder():
-    """Remove the reminder flag once config is complete."""
     if INCOMPLETE_CONFIG_FLAG.exists():
         INCOMPLETE_CONFIG_FLAG.unlink()
 
 
 def _clean_url(url):
-    """Strip Slack mrkdwn link formatting: <url> or <url|text>"""
     if not url:
         return url
     url = url.strip()
@@ -82,12 +77,7 @@ def _clean_url(url):
 
 
 def _ask_bracket_url_via_dm(user_id, gender_label, config, pool):
-    """
-    Ask the user for a bracket pool URL via DM.
-    Retries daily until tournament end or user says 'stop'.
-    Returns the URL string, empty string if skipped, or None if pending retry.
-    """
-    from slack_dm import send_dm, poll_for_reply, save_pending_dm
+    from slack_bot.slack_dm import send_dm, poll_for_reply, save_pending_dm  # fix 1
 
     tournament_end = _tournament_end(config, gender_label)
     url_key = "MEN_URL" if gender_label == "men's" else "WOMEN_URL"
@@ -147,11 +137,7 @@ def _ask_bracket_url_via_dm(user_id, gender_label, config, pool):
 
 
 def run_slack_dm_setup(config):
-    """
-    Run the full setup flow via Slack DMs.
-    Returns updated config, or None if timed out mid-setup.
-    """
-    from slack_dm import ask_via_dm, send_dm, send_dm_blocks, clear_pending_dm
+    from slack_bot.slack_dm import ask_via_dm, send_dm, send_dm_blocks, clear_pending_dm  # fix 1
 
     user_id = config.get("SLACK_MANAGER_ID")
     if not user_id:
@@ -214,7 +200,6 @@ def run_slack_dm_setup(config):
         return None
     config["POST_WEEKENDS"] = reply.strip().lower() in ("yes", "y")
 
-    # fix: ask for tournament end dates in CLI path too
     reply = ask_via_dm(
         user_id,
         f"📅 When does the *men's* tournament end this year? (YYYY-MM-DD format)\n"
@@ -236,7 +221,7 @@ def run_slack_dm_setup(config):
     config.setdefault("POOLS", [{"SOURCE": "custom"}])
     if not config["POOLS"]:
         print("[ERROR] No POOLS configured — cannot continue. Add pool URLs and run setup again.")
-        return None  # ← was: return config, config.get("METHOD", "cli"), [], [], [], []
+        return config, config.get("METHOD", "cli"), [], [], [], []  # 6-tuple, not None
     pool = config["POOLS"][0]
 
     men_url = _ask_bracket_url_via_dm(user_id, "men's", config, pool)
@@ -258,10 +243,6 @@ def run_slack_dm_setup(config):
 
 
 def _fetch_leaderboard(pool, gender, config, method):
-    """
-    Fetch leaderboard for a given gender. Falls back to manual DM entry on failure.
-    Returns a list of leaderboard strings, or [] if unavailable.
-    """
     url_key = "MEN_URL" if gender == "men" else "WOMEN_URL"
     gender_label = "men's" if gender == "men" else "women's"
     url = pool.get(url_key)
@@ -269,15 +250,16 @@ def _fetch_leaderboard(pool, gender, config, method):
     if not url:
         return []
 
+    state = config.get("PLAYWRIGHT_STATE", PLAYWRIGHT_STATE)  # use config value, fall back to constant
     try:
         print(f"[INFO] Fetching {gender_label} leaderboard...")
-        results = run_async(get_top_n_async(url, config.get("TOP_N", 5), PLAYWRIGHT_STATE))
+        results = run_async(get_top_n_async(url, config.get("TOP_N", 5), state))
         print(f"[INFO] {gender_label.capitalize()} top {len(results)} fetched: {results}")
         return results
     except Exception as e:
         print(f"[WARN] Failed to fetch {gender_label} leaderboard: {e}")
         if method == "slack" and config.get("SLACK_MANAGER_ID"):
-            from slack_dm import send_dm, ask_manual_top_users
+            from slack_bot.slack_dm import send_dm, ask_manual_top_users  # already fixed
             send_dm(
                 config["SLACK_MANAGER_ID"],
                 f"⚠️ Couldn't scrape the {gender_label} leaderboard:\n```{e}```"
@@ -287,10 +269,6 @@ def _fetch_leaderboard(pool, gender, config, method):
 
 
 def run_setup(existing_config=None):
-    """
-    Run the full first-time setup flow.
-    Returns (config, method, men_games, women_games, top_men, top_women).
-    """
     config = existing_config or {}
 
     print("\n--- March Madness Bot Setup ---\n")
@@ -331,11 +309,9 @@ def run_setup(existing_config=None):
                        default="y", cast=lambda x: x.lower() == "y")
         ask_if_missing(config, "SEND_DAILY_SUMMARY", "Send daily summary? (y/n)",
                        default="y", cast=lambda x: x.lower() == "y")
-
-        # fix: ask for tournament end dates in CLI path too
         ask_if_missing(
             config, "TOURNAMENT_END_MEN",
-            f"Men's championship date (YYYY-MM-DD)? [{TOURNAMENT_DATES_HELP.strip().splitlines()[-2].strip()}]",
+            f"Men's championship date (YYYY-MM-DD)?",
             default=_DEFAULT_TOURNAMENT_END_MEN.isoformat()
         )
         ask_if_missing(
@@ -350,7 +326,7 @@ def run_setup(existing_config=None):
         config.setdefault("POOLS", [{"SOURCE": "custom"}])
         if not config["POOLS"]:
             print("[ERROR] No POOLS configured — cannot continue. Add pool URLs and run setup again.")
-            return config, config.get("METHOD", "cli"), [], [], [], []
+            return config, config.get("METHOD", "cli"), [], [], [], []  # 6-tuple, not None
         pool = config["POOLS"][0]
 
         if not pool.get("MEN_URL"):
@@ -376,10 +352,12 @@ def run_setup(existing_config=None):
 
         save_json(CONFIG_FILE, config)
 
+    # second guard after both method branches
     config.setdefault("POOLS", [{"SOURCE": "custom"}])
     if not config["POOLS"]:
         print("[ERROR] No POOLS configured — cannot continue. Add pool URLs and run setup again.")
-        return None  # ← was: return config, config.get("METHOD", "cli"), [], [], [], []
+        return config, config.get("METHOD", "cli"), [], [], [], []  # 6-tuple, not None
+
     pool = config["POOLS"][0]
 
     print("\n[INFO] Fetching yesterday's games...")
@@ -406,10 +384,11 @@ def run_setup(existing_config=None):
                 print("[INFO] Old session was invalid, deleting...")
 
             browser_success = False
-            while not browser_success:
+            retries = 0
+            while not browser_success and retries < _MAX_BROWSER_RETRIES:  # fix 3: bounded loop
                 print("[INFO] Opening browser for leaderboard login...")
                 if method == "slack" and config.get("SLACK_MANAGER_ID"):
-                    from slack_dm import send_dm, poll_for_reply
+                    from slack_bot.slack_dm import send_dm, poll_for_reply  # fix 1
                     send_dm(
                         config["SLACK_MANAGER_ID"],
                         "🌐 Opening a browser window on your computer so you can log in to your bracket site.\n\n"
@@ -424,9 +403,10 @@ def run_setup(existing_config=None):
                     ))
                     browser_success = True
                 except Exception as e:
+                    retries += 1
                     print(f"[WARN] Browser login failed: {e}")
                     if method == "slack" and config.get("SLACK_MANAGER_ID"):
-                        from slack_dm import send_dm, poll_for_reply
+                        from slack_bot.slack_dm import send_dm, poll_for_reply, ask_manual_top_users  # fix 1
                         channel_id, ts = send_dm(
                             config["SLACK_MANAGER_ID"],
                             f"⚠️ Browser login failed:\n```{e}```\n\n"
@@ -440,7 +420,6 @@ def run_setup(existing_config=None):
                             send_dm(config["SLACK_MANAGER_ID"], "👍 Retrying — watch for the browser window!")
                             continue
                         else:
-                            from slack_dm import ask_manual_top_users
                             send_dm(config["SLACK_MANAGER_ID"], "👍 No problem — let's do it manually!")
                             top_men = ask_manual_top_users(config["SLACK_MANAGER_ID"], "men's", config.get("TOP_N", 5))
                             top_women = ask_manual_top_users(
@@ -468,7 +447,6 @@ def run_setup(existing_config=None):
     top_men = deduplicate_top_users(top_men)
     top_women = deduplicate_top_users(top_women)
 
-    # build_daily_summary now returns (blocks, no_games)
     blocks, no_games = build_daily_summary(
         men_games, women_games, top_men, top_women,
         men_url=pool.get("MEN_URL"),
@@ -479,7 +457,7 @@ def run_setup(existing_config=None):
     go_live = False
 
     if method == "slack" and config.get("SLACK_MANAGER_ID"):
-        from slack_dm import send_dm, send_dm_blocks, poll_for_reply, save_pending_dm
+        from slack_bot.slack_dm import send_dm, send_dm_blocks, poll_for_reply, save_pending_dm  # fix 1
         user_id = config["SLACK_MANAGER_ID"]
         send_dm(user_id, "✅ Setup complete! Here's a preview of what your daily message will look like:")
         send_dm_blocks(user_id, blocks)
@@ -541,7 +519,6 @@ def run_setup(existing_config=None):
         mock_mode = not bool(config.get("SLACK_WEBHOOK_URL"))
         post_message(config, text=build_yearly_intro_message(config), mock=mock_mode)
 
-        # fix: skip posting summary on off-days during setup preview
         if not no_games:
             post_message(config, blocks=blocks, mock=mock_mode)
 
@@ -553,7 +530,7 @@ def run_setup(existing_config=None):
         save_json(SEEN_FILE, list(set(g["id"] for g in all_games)))
 
         if method == "slack" and config.get("SLACK_MANAGER_ID"):
-            from slack_dm import send_dm
+            from slack_bot.slack_dm import send_dm  # fix 1
             send_dm(
                 config["SLACK_MANAGER_ID"],
                 "🎉🏆 *We're LIVE!* The bot is now active for the tournament!\n\n"
@@ -571,7 +548,6 @@ def run_setup(existing_config=None):
 
 
 def _ping_live_counter(config: dict) -> None:
-    """Fire-and-forget ping when a bot goes live. Fails silently."""
     url = config.get("LIVE_COUNTER_URL", "")
     if not url:
         return
@@ -586,4 +562,4 @@ def _ping_live_counter(config: dict) -> None:
             print(
                 f"[INFO] 🎉 Bot live! {data.get('thisYear', '?')} bot(s) live in {year}, {data.get('total', '?')} all-time.")
     except Exception:
-        pass  # never block go-live over a counter failure
+        pass

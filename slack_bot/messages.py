@@ -1,6 +1,6 @@
 import random
 import datetime
-from config import load_json, save_json, LAST_RANKINGS_FILE
+from bot_setup.config import load_json, save_json, LAST_RANKINGS_FILE
 
 _INTROS = [
     "☀️ Good morning! Here's the madness from yesterday:",

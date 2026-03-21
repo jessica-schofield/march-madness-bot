@@ -7,14 +7,14 @@ import sys
 from asyncio import run as run_async
 from pathlib import Path
 
-from config import CONFIG_FILE, SEEN_FILE, LAST_POST_FILE, YEARLY_FLAG_FILE, load_json, save_json, needs_setup
-from bot_setup import run_setup, PLAYWRIGHT_STATE
-from espn import get_final_games
-from cbs import ensure_cbs_login, get_top_n_async, deduplicate_top_users
-from messages import build_daily_summary
-from slack_utils import post_message
-from slack_dm import send_dm, ask_manual_top_users
-from yearly_setup_reminder import yearly_reminder, handle_stop, check_tournament_end, needs_config_reminder
+from bot_setup.config import CONFIG_FILE, SEEN_FILE, LAST_POST_FILE, YEARLY_FLAG_FILE, load_json, save_json, needs_setup
+from bot_setup.bot_setup import run_setup, PLAYWRIGHT_STATE
+from sources.espn import get_final_games
+from sources.cbs import ensure_cbs_login, get_top_n_async, deduplicate_top_users
+from slack_bot.messages import build_daily_summary
+from slack_bot.slack_utils import post_message
+from slack_bot.slack_dm import send_dm, ask_manual_top_users
+from status.yearly_setup_reminder import yearly_reminder, handle_stop, check_tournament_end, needs_config_reminder
 
 
 def run(config=None, yearly_flag=None):

@@ -2,8 +2,8 @@ import datetime
 import json
 from pathlib import Path
 from slack_sdk import WebClient
-from yearly_setup_reminder import yearly_reminder, next_business_day
-from config import YEARLY_REMINDER_FLAG_FILE
+from status.yearly_setup_reminder import yearly_reminder, next_business_day
+from bot_setup.config import YEARLY_REMINDER_FLAG_FILE
 
 CONFIG_FILE = Path("config.json")
 YEARLY_FLAG_FILE = YEARLY_REMINDER_FLAG_FILE
