@@ -4,6 +4,13 @@ A Slack bot that tracks NCAA March Madness games and bracket standings, posting 
 
 ---
 
+## What's New — v1.1.1
+
+### 🐛 Placeholder URL Browser Skip Fix
+The bot now correctly skips the browser login step when both pool URLs are still set to placeholder values. Previously, `ensure_cbs_login` could be called unnecessarily during setup — this is now handled gracefully with a clear `[WARN]` log message.
+
+---
+
 ## What's New — v1.1
 
 ### 🆕 Personal Bracket Tracking via Slack DMs
@@ -96,7 +103,7 @@ All settings are stored in `config.json`. Key fields:
 pytest
 ```
 
-312 tests covering setup, scraping, Slack utilities, message formatting, and import hygiene.
+337 tests covering setup, scraping, Slack utilities, message formatting, and import hygiene.
 
 ---
 
