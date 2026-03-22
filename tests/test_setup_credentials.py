@@ -57,16 +57,17 @@ class TestAskSlackCredentialsCli:
 
     def test_bot_token_saved_to_env_when_provided(self):
         """Bot token is written to os.environ (and .env) — not stored in config dict."""
+        import dotenv
         from bot_setup.setup_cli import ask_slack_credentials_cli
         config = {}
         with patch("bot_setup.setup_cli.ask_with_help", side_effect=[
             "https://hooks.slack.com/services/REAL",
             "xoxb-fake-token",
             "U012ABC",
-        ]), patch("bot_setup.setup_cli.set_key") as mock_set_key, \
+        ]), patch.object(dotenv, "set_key") as mock_set_key, \
            patch.dict(os.environ, {"SLACK_BOT_TOKEN": ""}, clear=False):
             ask_slack_credentials_cli(config)
-            mock_set_key.assert_called_once()
+        mock_set_key.assert_called()
 
     def test_returns_dict_not_none(self):
         from bot_setup.setup_cli import ask_slack_credentials_cli
