@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.0.3] - 2026-03-22
+
+### Fixed
+- `clear_pending_dm` now imported inside `run_slack_dm_setup` — was causing silent `NameError` at runtime
+- Slack setup no longer returns early after collecting preferences — falls through to leaderboard fetch and go-live preview
+- Removed stale `pending_dm.json` from repository
+
+## [2.0.2] - 2026-03-22
+
+### Fixed
+- Double-send bug in Slack DM setup — `run_slack_dm_setup` was called twice due to missing `return` after first call completed
+- `test_bot_token_saved_to_env_when_provided` now patches `dotenv.set_key` via `patch.object` to avoid real `.env` token leaking into test environment
+- `test_slack_setup_legacy.py` permanently removed — referenced deleted `bot_setup.slack_setup` module
+
 ## [2.0.1] - 2026-03-21
 
 ### Fixed
