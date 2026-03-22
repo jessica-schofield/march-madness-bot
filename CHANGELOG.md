@@ -7,33 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.0.1] - 2026-03-21
+
 ### Fixed
-- Hardcoded absolute paths in `status/yearly_setup_reminder.py` lines 111–113 replaced with `Path(__file__).parent.parent`-relative paths — bot no longer breaks when run outside `/Users/jess/march-madness-bot`
-
-## [1.1.4] - 2026-03-21
-
-### Changed
-- Fixes config file and slack setup
+- Hardcoded absolute paths in `status/yearly_setup_reminder.py` replaced with `Path(__file__).parent.parent`-relative constants
+- `datetime.utcnow()` in `slack_bot/slack_dm.py` replaced with timezone-aware `datetime.now(timezone.utc)`
+- `_ESPN_CHALLENGE_ID_FALLBACK` constant added at module level in `sources/cbs.py`
+- Removed deleted `bot_setup/slack_setup.py` test files (`test_slack_setup.py`, `test_slack_setup_legacy.py`)
 
 ## [2.0.0] - 2026-03-21
 
 ### Changed
-- breaking change
+- Breaking change
 
-## [1.1.0] - 2026-03-21
+## [1.1.4] - 2026-03-21
 
-### Changed
-- new feature
-
-## [1.0.2] - 2026-03-21
-
-### Changed
-- what changed
-
-## [1.0.1] - 2026-03-21
-
-### Changed
-- Fix webhook guard firing before pools check, 442 tests passing
+### Fixed
+- Config file and slack setup
 
 ## [1.1.2] - 2026-03-21
 

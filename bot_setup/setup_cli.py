@@ -167,8 +167,10 @@ def ask_slack_credentials_cli(config):
     print("\n--- Slack Setup ---")
 
     webhook = ask_with_help(
+        "Slack webhook URL",
         SLACK_WEBHOOK_HELP,
         default=config.get("SLACK_WEBHOOK_URL", ""),
+        config=config,
     )
     # Only overwrite if user provided a non-empty value OR there was no existing value
     if webhook or not config.get("SLACK_WEBHOOK_URL"):
@@ -197,8 +199,10 @@ def ask_slack_credentials_cli(config):
         print("[WARN] No bot token set — Slack DMs and reminders won't work.")
 
     manager_id = ask_with_help(
+        "Slack Manager User ID",
         SLACK_MANAGER_HELP,
         default=config.get("SLACK_MANAGER_ID", ""),
+        config=config,
     )
     if manager_id or not config.get("SLACK_MANAGER_ID"):
         config["SLACK_MANAGER_ID"] = manager_id

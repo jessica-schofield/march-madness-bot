@@ -339,7 +339,8 @@ def run_setup(existing_config=None):
                 print("[INFO] Setup paused — will resume via DM tomorrow morning.")
                 schedule_incomplete_config_reminder()
                 return None, method, [], [], [], []
-            config = result
+            return result, method, [], [], [], []   # ← REPLACE config = result with this
+
         else:
             print("[WARN] Missing webhook or user ID — falling back to CLI setup.")
             method = "cli"
