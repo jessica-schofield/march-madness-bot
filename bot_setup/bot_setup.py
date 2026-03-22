@@ -190,7 +190,9 @@ def _ask_bracket_url_via_dm(user_id, gender_label, config, pool):
 
 
 def run_slack_dm_setup(config):
-    from slack_bot.slack_dm import ask_via_dm, send_dm, send_dm_blocks, clear_pending_dm
+    from dotenv import load_dotenv
+    from slack_bot.slack_dm import send_dm, ask_via_dm, clear_pending_dm   # ← add clear_pending_dm
+    load_dotenv(override=True)
 
     user_id = config.get("SLACK_MANAGER_ID")
     if not user_id:
@@ -339,7 +341,7 @@ def run_setup(existing_config=None):
                 print("[INFO] Setup paused — will resume via DM tomorrow morning.")
                 schedule_incomplete_config_reminder()
                 return None, method, [], [], [], []
-            return result, method, [], [], [], []   # ← REPLACE config = result with this
+            config = result          # ← change back to this, remove the return
 
         else:
             print("[WARN] Missing webhook or user ID — falling back to CLI setup.")
