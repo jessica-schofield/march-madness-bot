@@ -1,1 +1,1 @@
-{"user_id": "U03FHBPK0F7", "question": "Ready to go live? Reply `yes` to activate the bot, or `no` and I'll check back tomorrow morning.", "default": null, "optional": true, "retry_at": "2026-03-23T09:00:00"}
+{"user_id": "U03FHBPK0F7", "question": "\ud83d\udcc5 Should I post on weekends too? The madness doesn't stop... Reply `yes` or `no`", "default": "no", "optional": false, "retry_at": "2026-03-23T09:00:00"}
