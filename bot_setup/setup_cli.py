@@ -2,8 +2,11 @@
 CLI interaction helpers for March Madness Bot setup.
 Pure input/output utilities — no Playwright, CBS, or Slack DM dependencies.
 """
+import os
 import sys
 from pathlib import Path
+
+from dotenv import load_dotenv, set_key
 
 from bot_setup.config import CONFIG_FILE, save_json
 
@@ -160,8 +163,6 @@ def get_missing_config_fields(config):
 
 def ask_slack_credentials_cli(config):
     """Collect webhook URL, bot token, and manager user ID via CLI prompts."""
-    from dotenv import load_dotenv, set_key
-    import os
     load_dotenv()
 
     print("\n--- Slack Setup ---")

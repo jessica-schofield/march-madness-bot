@@ -9,6 +9,8 @@ import pytest
 from pathlib import Path
 from unittest.mock import patch
 
+from bot_setup.config import needs_setup
+
 
 # ---------------------------------------------------------------------------
 # Bugs found in config.py — tests document expected behaviour once fixed
@@ -316,6 +318,30 @@ def test_needs_setup_still_requires_slack_webhook():
     assert needs_setup(cfg) is True
 
 
+def test_needs_setup_returns_false_when_minutes_between_messages_is_zero():
+    """0 is a valid value — should not be treated as missing."""
+    config = {**_full_config(), "MINUTES_BETWEEN_MESSAGES": 0}
+    assert needs_setup(config) is False
+
+
+def test_needs_setup_returns_false_when_post_weekends_is_false():
+    """False is a valid value — should not be treated as missing."""
+    config = {**_full_config(), "POST_WEEKENDS": False}
+    assert needs_setup(config) is False
+
+
+def test_needs_setup_returns_true_when_minutes_between_messages_is_none():
+    """None means not set — should trigger setup."""
+    config = {**_full_config(), "MINUTES_BETWEEN_MESSAGES": None}
+    assert needs_setup(config) is True
+
+
+def test_needs_setup_returns_true_when_post_weekends_is_none():
+    """None means not set — should trigger setup."""
+    config = {**_full_config(), "POST_WEEKENDS": None}
+    assert needs_setup(config) is True
+
+
 # ---------------------------------------------------------------------------
 # fill_defaults
 # ---------------------------------------------------------------------------
@@ -453,3 +479,43 @@ def test_required_keys_contains_slack_webhook():
 def test_required_keys_post_weekends_default_is_false():
     from bot_setup.config import REQUIRED_KEYS
     assert REQUIRED_KEYS["POST_WEEKENDS"] is False
+
+
+def _full_config(**overrides):
+    config = {
+        "SLACK_WEBHOOK_URL": "https://hooks.slack.com/fake",
+        "SLACK_MANAGER_ID": "U012ABC",
+        "TOP_N": 5,
+        "POOLS": [{"SOURCE": "cbs", "MEN_URL": "https://cbs.com/men", "WOMEN_URL": "https://cbs.com/women"}],
+        "SEND_DAILY_SUMMARY": True,
+        "SEND_GAME_UPDATES": True,
+        "POST_WEEKENDS": False,
+        "MINUTES_BETWEEN_MESSAGES": 0,
+        "PLAYWRIGHT_HEADLESS": True,
+        "PLAYWRIGHT_STATE": "playwright_state.json",
+        "TOURNAMENT_END_MEN": "2026-04-07",
+        "TOURNAMENT_END_WOMEN": "2026-04-06",
+        "VERSION": "1.0.0",
+    }
+    config.update(overrides)
+    return config
+
+
+def test_needs_setup_returns_false_when_minutes_between_messages_is_zero():
+    """0 is a valid value — should not be treated as missing."""
+    assert needs_setup(_full_config(MINUTES_BETWEEN_MESSAGES=0)) is False
+
+
+def test_needs_setup_returns_false_when_post_weekends_is_false():
+    """False is a valid value — should not be treated as missing."""
+    assert needs_setup(_full_config(POST_WEEKENDS=False)) is False
+
+
+def test_needs_setup_returns_true_when_minutes_between_messages_is_none():
+    """None means not set — should trigger setup."""
+    assert needs_setup(_full_config(MINUTES_BETWEEN_MESSAGES=None)) is True
+
+
+def test_needs_setup_returns_true_when_post_weekends_is_none():
+    """None means not set — should trigger setup."""
+    assert needs_setup(_full_config(POST_WEEKENDS=None)) is True

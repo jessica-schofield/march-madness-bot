@@ -55,17 +55,17 @@ def _config_with_urls(**overrides):
 
 def _config_with_real_urls(**overrides):
     """Config with non-placeholder URLs — lines 406/411 do NOT fire."""
-    c = {
+    config = {
         **_base_config(),
         "METHOD": "cli",
         "SLACK_WEBHOOK_URL": "https://hooks.slack.com/services/REAL",
-        "SLACK_MANAGER_ID": "U012ABC",
+        "SLACK_MANAGER_ID": "TEST_SUITE",
         "POOLS": [{"SOURCE": "custom",
                    "MEN_URL": _REAL_MEN_URL,
                    "WOMEN_URL": _REAL_WOMEN_URL}],
     }
-    c.update(overrides)
-    return c
+    config.update(overrides)
+    return config
 
 # Sequences for _config_with_urls() — unittestpool slugs → _is_placeholder_url=True
 # so lines 406+411 fire (men_url="", women_url="") → both empty → line 417 fires (manual="n")
@@ -75,9 +75,9 @@ _CLI_Y = ["cli", "5", "0", "n", "y", "y", "", "", "n", "y"]       # go-live = ye
 _CLI_N = ["cli", "5", "0", "n", "y", "y", "", "", "n", "n", "n"]  # go-live = no
 
 # Sequences for _config_with_real_urls() — URL prompts do NOT fire
-# method, TOP_N, MINUTES, POST_WEEKENDS, GAME_UPDATES, DAILY_SUMMARY, go-live
-_REAL_CLI_Y = ["cli", "5", "0", "n", "y", "y", "y"]
-_REAL_CLI_N = ["cli", "5", "0", "n", "y", "y", "n", "n"]
+# method, TOP_N, MINUTES, POST_WEEKENDS, GAME_UPDATES, DAILY_SUMMARY, go-live, had_problem
+_REAL_CLI_Y = ["cli", "5", "0", "n", "y", "y", "y"]   # go-live = yes (no problem prompt on success)
+_REAL_CLI_N = ["cli", "5", "0", "n", "y", "y", "n", "n"]  # go-live = no, had_problem = no
 
 def _was_called_with_text(mock_calls, text):
     return any(

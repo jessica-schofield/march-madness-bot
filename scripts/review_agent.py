@@ -27,6 +27,41 @@ SRC_DIRS = ["bot_setup", "sources", "slack_bot", "status", "scrapers", "login"]
 TEST_DIR = ROOT / "tests"
 VENV = ROOT / "venv"
 
+# ---------------------------------------------------------------------------
+# Allowlists for known-accepted patterns
+# ---------------------------------------------------------------------------
+
+# Files that use local time throughout — all datetime comparisons pair
+# local now() with locally-stored isoformat values, and user-facing messages
+# show local time (e.g. "I'll check back at 9:00am"). UTC would be wrong here.
+_NAIVE_DATETIME_OK_FILES = {
+    "bot_setup/bot_setup.py",
+    "sources/espn.py",
+    "slack_bot/slack_dm.py",
+    "slack_bot/slack_utils.py",
+    "slack_bot/messages.py",
+    "status/yearly_setup_reminder.py",
+    "main.py",
+}
+
+# Functions whose local imports are deferred intentionally — moving them to
+# module level would change the patch target from slack_bot.slack_dm.X to
+# bot_setup.bot_setup.X / sources.cbs.X and break many existing test mocks.
+_IMPORT_INSIDE_FUNCTION_OK = {
+    "_ask_bracket_url_via_dm",
+    "run_slack_dm_setup",
+    "_fetch_leaderboard",
+    "run_setup",
+    "_send_setup_problem_email",
+    "_pick_espn_group_sync",
+    "ensure_cbs_login",
+}
+
+# Modules that don't need their own test file:
+#   setup_cli     — covered thoroughly by test_setup_credentials.py / test_setup_flow.py
+#   scraper_debug — empty file, no logic to test
+_NO_TEST_FILE_OK = {"setup_cli", "scraper_debug"}
+
 Severity = Literal["critical", "warning", "info"]
 
 
@@ -154,6 +189,9 @@ class ReviewAgent:
         """Flag datetime.datetime.now() / utcnow() without timezone — cron runs in local time."""
         pattern = re.compile(r'datetime\.datetime\.(now|utcnow)\(\)')
         for py_file in self._src_files():
+            rel = str(py_file.relative_to(ROOT))
+            if rel in _NAIVE_DATETIME_OK_FILES:
+                continue
             text = py_file.read_text()
             for i, line in enumerate(text.splitlines(), 1):
                 if pattern.search(line) and "timezone" not in line and not line.strip().startswith("#"):
@@ -229,6 +267,8 @@ class ReviewAgent:
                 continue
             for node in ast.walk(tree):
                 if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                    if node.name in _IMPORT_INSIDE_FUNCTION_OK:
+                        continue
                     for child in ast.walk(node):
                         if isinstance(child, (ast.Import, ast.ImportFrom)) and child is not node:
                             self.add(
@@ -273,6 +313,8 @@ class ReviewAgent:
         for py_file in self._src_files():
             module = py_file.stem
             if module.startswith("_") or module in ("__init__", "conftest"):
+                continue
+            if module in _NO_TEST_FILE_OK:
                 continue
             if module not in tested and f"test_{module}" not in tested:
                 self.add(
