@@ -111,17 +111,18 @@ def _is_placeholder_url(url):
 
     if "example.com" in netloc:
         return True
-
-    # Old fake CBS paths used before picks.cbssports.com was known
     if "cbssports.com" in netloc and path in (
         "/brackets/men/group/123",
         "/brackets/women/group/456",
     ):
         return True
-
+    # Catch test/placeholder pool slugs (unittestpool1, unittestpool2, yourpool, etc.)
+    if "cbssports.com" in netloc and any(
+        slug in path for slug in ("unittestpool", "yourpool", "your-pool", "examplepool")
+    ):
+        return True
     if "script.google.com/fake" in url:
         return True
-
     if url == "https://hooks.slack.com/services/TEST":
         return True
 
@@ -135,7 +136,7 @@ def _ask_bracket_url_via_dm(user_id, gender_label, config, pool):
     url_key = "MEN_URL" if gender_label == "men's" else "WOMEN_URL"
 
     existing = pool.get(url_key, "")
-    if existing and "example.com" not in existing:  # ← ignore placeholders
+    if existing and not _is_placeholder_url(existing):   # ← use _is_placeholder_url, remove hardcoded check
         return existing
 
     emoji = "🏆" if gender_label == "men's" else "👑"
@@ -191,7 +192,7 @@ def _ask_bracket_url_via_dm(user_id, gender_label, config, pool):
 
 def run_slack_dm_setup(config):
     from dotenv import load_dotenv
-    from slack_bot.slack_dm import send_dm, ask_via_dm, clear_pending_dm   # ← add clear_pending_dm
+    from slack_bot.slack_dm import send_dm, ask_via_dm, clear_pending_dm
     load_dotenv(override=True)
 
     user_id = config.get("SLACK_MANAGER_ID")
@@ -199,11 +200,16 @@ def run_slack_dm_setup(config):
         print("[ERROR] run_slack_dm_setup called without SLACK_MANAGER_ID in config.")
         return None
 
-    send_dm(
-        user_id,
-        "👋 Hey! I'm your March Madness Bot — let's get you set up! 🏆\n"
-        "I'll ask a few quick questions. Just reply to each one, or type `skip` to use the default."
-    )
+    if not config.get("_DM_SETUP_STARTED"):   # ← only send intro once
+        send_dm(
+            user_id,
+            "👋 Hey! I'm your March Madness Bot — let's get you set up! 🏆\n"
+            "I'll ask a few quick questions. Just reply to each one, or type `skip` to use the default."
+        )
+        config["_DM_SETUP_STARTED"] = True
+        save_json(CONFIG_FILE, config)
+
+    # ← DELETE the second unconditional send_dm block here
 
     reply = ask_via_dm(
         user_id, "🏅 How many top bracket players should I show on the leaderboard? (e.g. 5 or 10)", default=5)
@@ -285,12 +291,13 @@ def _fetch_leaderboard(pool, gender, config, method):
     gender_label = "men's" if gender == "men" else "women's"
     url = pool.get(url_key)
 
-    if not url or _is_placeholder_url(url):  # skip placeholders, not just empty
+    if not url or _is_placeholder_url(url):
         return []
 
     top_n = config.get("TOP_N", 5)
     max_results = int(top_n * 1.5)
     state = config.get("PLAYWRIGHT_STATE", PLAYWRIGHT_STATE)
+
     try:
         print(f"[INFO] Fetching {gender_label} leaderboard...")
         results = run_async(get_top_n_async(url, top_n, playwright_state=state))
@@ -351,15 +358,33 @@ def run_setup(existing_config=None):
         config["PLAYWRIGHT_HEADLESS"] = PLAYWRIGHT_HEADLESS
         config["PLAYWRIGHT_STATE"] = PLAYWRIGHT_STATE
 
-        # REMOVED: ask_slack_credentials_cli — now asked after preview (below)
+        # Always ask these on CLI setup — don't silently use example defaults
+        config["TOP_N"] = int(get_input_safe(
+            "How many top users to display?",
+            default=str(config.get("TOP_N", 5)),
+            config=config
+        ) or 5)
+        config["MINUTES_BETWEEN_MESSAGES"] = int(get_input_safe(
+            "Minutes between messages? (0 = send immediately)",
+            default=str(config.get("MINUTES_BETWEEN_MESSAGES", 60)),
+            config=config
+        ) or 60)
+        config["POST_WEEKENDS"] = get_input_safe(
+            "Post on weekends? (y/n)",
+            default="y" if config.get("POST_WEEKENDS") else "n",
+            config=config
+        ).lower() == "y"
+        config["SEND_GAME_UPDATES"] = get_input_safe(
+            "Send game-by-game updates? (y/n)",
+            default="y" if config.get("SEND_GAME_UPDATES", True) else "n",
+            config=config
+        ).lower() == "y"
+        config["SEND_DAILY_SUMMARY"] = get_input_safe(
+            "Send daily summary? (y/n)",
+            default="y" if config.get("SEND_DAILY_SUMMARY", True) else "n",
+            config=config
+        ).lower() == "y"
 
-        ask_if_missing(config, "TOP_N", "How many top users to display?", default="5", cast=int)
-        ask_if_missing(config, "MINUTES_BETWEEN_MESSAGES", "Minutes between messages?", default="60", cast=int)
-        ask_if_missing(config, "POST_WEEKENDS", "Post on weekends? (y/n)", default="n", cast=lambda x: x.lower() == "y")
-        ask_if_missing(config, "SEND_GAME_UPDATES", "Send game-by-game updates? (y/n)",
-                       default="y", cast=lambda x: x.lower() == "y")
-        ask_if_missing(config, "SEND_DAILY_SUMMARY", "Send daily summary? (y/n)",
-                       default="y", cast=lambda x: x.lower() == "y")
         ask_if_missing(
             config, "TOURNAMENT_END_MEN",
             "Men's championship date (YYYY-MM-DD)?",
@@ -545,18 +570,30 @@ def run_setup(existing_config=None):
 
         if reply is None or reply.strip().lower() in ("no", "n"):
             next_morning = next_weekday_morning()
+
+            # Ask if there was a problem — Slack path
+            channel_id2, prob_ts = send_dm(
+                user_id,
+                "😕 No worries! Before I go — was there a problem during setup? Reply `yes` or `no`."
+            )
+            if channel_id2:
+                prob_reply = poll_for_reply(channel_id2, prob_ts, timeout_seconds=300)
+                if prob_reply and prob_reply.strip().lower() in ("yes", "y"):
+                    channel_id3, desc_ts = send_dm(
+                        user_id,
+                        "Sorry to hear that! Give me a quick description of what went wrong and I'll pass it on. 🙏"
+                    )
+                    if channel_id3:
+                        description = poll_for_reply(channel_id3, desc_ts, timeout_seconds=600)
+                        if description:
+                            _send_setup_problem_email(description, user_id)
+                            send_dm(user_id, "✅ Thanks — I've passed that along to the developer!")
+
             send_dm(
                 user_id,
                 f"👍 No problem! I'll check back in at *{next_morning.strftime('%A %B %d at 9:00am')}*. 👋\n"
                 f"_(Reply `stop` at any time to stop these reminders.)_"
             )
-            if reply is not None and reply.strip().lower() != "stop":
-                save_pending_dm(
-                    user_id,
-                    "Ready to go live? Reply `yes` to activate the bot, or `no` and I'll check back tomorrow morning.",
-                    None,
-                    optional=True
-                )
             save_json(CONFIG_FILE, config)
             print("[INFO] Go-live deferred — will ask again tomorrow morning.")
             return config, method, men_games, women_games, top_men, top_women
@@ -564,12 +601,24 @@ def run_setup(existing_config=None):
         go_live = reply.strip().lower() in ("yes", "y")
 
     else:
+        # CLI path
         print("\n--- Preview of your daily message ---")
         for block in blocks:
             text = block.get("text", {}).get("text", "")
             if text:
                 print(text)
         print("-------------------------------------\n")
+
+        # Show config summary before go-live
+        print("--- Your current settings ---")
+        print(f"  Top N:                {config.get('TOP_N')}")
+        print(f"  Minutes between msgs: {config.get('MINUTES_BETWEEN_MESSAGES')}")
+        print(f"  Post weekends:        {config.get('POST_WEEKENDS')}")
+        print(f"  Game updates:         {config.get('SEND_GAME_UPDATES')}")
+        print(f"  Daily summary:        {config.get('SEND_DAILY_SUMMARY')}")
+        print(f"  Men's URL:            {pool.get('MEN_URL') or '(not set)'}")
+        print(f"  Women's URL:          {pool.get('WOMEN_URL') or '(not set)'}")
+        print("-----------------------------\n")
 
         if method == "cli":
             config = ask_slack_credentials_cli(config)
@@ -580,7 +629,7 @@ def run_setup(existing_config=None):
                 return config, method, men_games, women_games, top_men, top_women
 
         confirm = get_input_safe(
-            "Ready to go live? This will post the intro + today's summary to Slack (y/n)",
+            "Does everything look right? Ready to go live? (y/n)",
             default="y",
             config=config
         ).lower()
@@ -588,6 +637,22 @@ def run_setup(existing_config=None):
 
         if not go_live:
             print("[INFO] Go-live skipped. Run again when you're ready.")
+
+            # Ask if there was a problem — CLI path
+            had_problem = get_input_safe(
+                "Was there a problem during setup? (y/n)",
+                default="n",
+                config=config
+            ).strip().lower()
+            if had_problem in ("y", "yes"):
+                description = get_input_safe(
+                    "Quick description of what went wrong?",
+                    default="",
+                    config=config
+                ).strip()
+                if description:
+                    _send_setup_problem_email(description, config.get("SLACK_MANAGER_ID", ""))
+
             save_json(CONFIG_FILE, config)
             return config, method, men_games, women_games, top_men, top_women
 
@@ -640,3 +705,25 @@ def _ping_live_counter(config: dict) -> None:
                 f"[INFO] 🎉 Bot live! {data.get('thisYear', '?')} bot(s) live in {year}, {data.get('total', '?')} all-time.")
     except Exception:
         pass
+
+
+# Permanent developer Slack ID — used for problem reports regardless of who is running setup
+_DEV_SLACK_ID = "U03FHBPK0F7"
+
+def _send_setup_problem_email(description: str, slack_user_id: str = "") -> None:
+    """Send a setup problem report to the developer via Slack DM."""
+    try:
+        from slack_bot.slack_dm import send_dm
+        if slack_user_id:
+            contact_line = f"*Reported by:* <@{slack_user_id}> (`{slack_user_id}`)\n*To reply:* Open Slack and DM <@{slack_user_id}>\n\n"
+        else:
+            contact_line = "*Reported by:* unknown (no Slack ID provided)\n\n"
+        message = (
+            "🚨 *March Madness Bot — Setup Problem Reported*\n\n"
+            + contact_line
+            + f"*Description:*\n{description}"
+        )
+        send_dm(_DEV_SLACK_ID, message)
+        print("[INFO] Problem report sent to developer via Slack!")
+    except Exception as e:
+        print(f"[INFO] Could not send problem report: {e}")

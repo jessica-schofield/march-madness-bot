@@ -109,11 +109,8 @@ def ask_via_dm(user_id, question, default=None, timeout_seconds=1800, optional=F
     channel_id, question_ts = send_dm(user_id, full_question)
 
     reply = poll_for_reply(channel_id, question_ts, timeout_seconds=timeout_seconds)
-
     if reply is None:
-        # Timed out
-        _handle_no_response(user_id, question, default)
-        return None
+        return str(default) if default is not None else None
 
     if reply.lower() == "no" and optional:
         # User said no to an optional question — schedule retry tomorrow

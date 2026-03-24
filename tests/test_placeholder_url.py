@@ -17,9 +17,6 @@ REAL_URLS = [
     # Actual pool URLs (picks.cbssports.com with real-looking pool IDs)
     "https://picks.cbssports.com/college-basketball/ncaa-tournament/bracket/pools/kbxw63b2ge3deojqg4ydq===/standings",
     "https://picks.cbssports.com/college-basketball/ncaaw-tournament/bracket/pools/abc123xyz/standings",
-    # Test fixture URLs — must also pass so mocks aren't exhausted
-    "https://picks.cbssports.com/college-basketball/ncaa-tournament/bracket/pools/unittestpool1/standings",
-    "https://picks.cbssports.com/college-basketball/ncaaw-tournament/bracket/pools/unittestpool2/standings",
     # Other real sources
     "https://fantasy.espn.com/games/tournament-challenge-bracket-2026/group?id=12345",
     "https://tournament.fantasysports.yahoo.com/t1/group/67890",
@@ -52,6 +49,10 @@ PLACEHOLDER_URLS = [
     "https://cbssports.com/brackets/women/group/456",
     "https://www.cbssports.com/brackets/men/group/123",
     "https://www.cbssports.com/brackets/women/group/456",
+    # Test fixture slugs — these are recognised placeholders
+    "https://picks.cbssports.com/college-basketball/ncaa-tournament/bracket/pools/unittestpool1/standings",
+    "https://picks.cbssports.com/college-basketball/ncaaw-tournament/bracket/pools/unittestpool2/standings",
+    "https://picks.cbssports.com/college-basketball/ncaa-tournament/bracket/pools/yourpool/standings",
 ]
 
 @pytest.mark.parametrize("url", PLACEHOLDER_URLS)
@@ -68,13 +69,14 @@ def test_placeholder_urls_are_detected(url):
 # ---------------------------------------------------------------------------
 
 def test_picks_cbssports_never_placeholder_regardless_of_pool_id():
-    """Any picks.cbssports.com URL with a /pools/<id>/standings structure is real."""
+    """Any picks.cbssports.com URL with a real /pools/<id>/standings structure is real.
+    Known placeholder slugs (unittestpool*, yourpool, examplepool) are excluded."""
     pool_ids = [
-        "testpool123",
-        "unittestpool1",
         "kbxw63b2ge3deojqg4ydq===",
+        "abc123xyz",
         "abc",
         "123",
+        "realpool",
         "fake_but_real_format",
     ]
     for pool_id in pool_ids:

@@ -7,6 +7,15 @@ import pytest
 from contextlib import ExitStack
 from unittest.mock import patch, MagicMock
 
+# ---------------------------------------------------------------------------
+# Input sequences for run_setup CLI path
+# URLs already set in _real_urls_config() so no URL prompts fire.
+# Sequence: method, TOP_N, MINUTES, POST_WEEKENDS, GAME_UPDATES, DAILY_SUMMARY,
+#           go-live-confirm, [had_problem if go-live=n]
+# ---------------------------------------------------------------------------
+_CLI_NO_GOLIVE = ["cli", "5", "0", "n", "y", "y", "n", "n"]
+_CLI_GOLIVE    = ["cli", "5", "0", "n", "y", "y", "y"]
+
 
 # ---------------------------------------------------------------------------
 # ask_slack_credentials_cli
@@ -57,15 +66,20 @@ class TestAskSlackCredentialsCli:
 
     def test_bot_token_saved_to_env_when_provided(self):
         """Bot token is written to os.environ (and .env) — not stored in config dict."""
-        import dotenv
         from bot_setup.setup_cli import ask_slack_credentials_cli
+        import dotenv
         config = {}
+        # Token must start with xoxb- AND be >= 30 chars to pass validation
+        valid_token = "xoxb-" + "a" * 30
         with patch("bot_setup.setup_cli.ask_with_help", side_effect=[
-            "https://hooks.slack.com/services/REAL",
-            "xoxb-fake-token",
-            "U012ABC",
-        ]), patch.object(dotenv, "set_key") as mock_set_key, \
+            "https://hooks.slack.com/services/REAL",  # webhook
+            valid_token,                               # bot token (passes both checks)
+            "U012ABC",                                 # manager id
+        ]), patch.object(dotenv, "set_key", return_value=None) as mock_set_key, \
+           patch("bot_setup.setup_cli.Path") as mock_path, \
            patch.dict(os.environ, {"SLACK_BOT_TOKEN": ""}, clear=False):
+            mock_path.return_value.touch.return_value = None
+            mock_path.return_value.__str__ = lambda s: ".env"
             ask_slack_credentials_cli(config)
         mock_set_key.assert_called()
 
@@ -151,8 +165,18 @@ class TestAskIfMissing:
 # ---------------------------------------------------------------------------
 
 def _standard_run_setup_patches():
-    """Common patches for run_setup tests. Does NOT patch post_message so
-    individual tests can assert on it separately."""
+    """Common patches for run_setup tests."""
+    from pathlib import Path as _RealPath
+
+    def _fake_path(p):
+        if str(p) == "playwright_state.json":
+            mock = MagicMock()
+            mock.exists.return_value = True
+            mock.stat.return_value.st_size = 1000
+            mock.__str__ = lambda s: str(p)
+            return mock
+        return _RealPath(p)
+
     return [
         patch("bot_setup.bot_setup.get_final_games", return_value=[]),
         patch("bot_setup.bot_setup._fetch_leaderboard", return_value=[]),
@@ -163,6 +187,7 @@ def _standard_run_setup_patches():
         patch("bot_setup.bot_setup.load_flag", return_value={"LIVE_FOR_YEAR": False}),
         patch("bot_setup.bot_setup.run_async"),
         patch("bot_setup.bot_setup.ensure_cbs_login", return_value=None),
+        patch("bot_setup.bot_setup.Path", side_effect=_fake_path),
         patch("bot_setup.bot_setup.save_json"),
         patch("bot_setup.bot_setup.ask_if_missing", side_effect=lambda c, k, *a, **kw: c),
     ]
@@ -205,7 +230,7 @@ class TestRunSetupCliGoLiveGuard:
         no_webhook_config = {**config, "SLACK_WEBHOOK_URL": ""}
 
         with ExitStack() as stack:
-            stack.enter_context(patch("bot_setup.bot_setup.get_input_safe", side_effect=["cli", "n"]))
+            stack.enter_context(patch("bot_setup.bot_setup.get_input_safe", side_effect=list(_CLI_NO_GOLIVE)))
             stack.enter_context(patch("bot_setup.bot_setup.ask_slack_credentials_cli", return_value=no_webhook_config))
             mock_post = stack.enter_context(patch("bot_setup.bot_setup.post_message"))
             _enter_patches(stack, _standard_run_setup_patches())
@@ -225,7 +250,7 @@ class TestRunSetupCliGoLiveGuard:
         with_webhook = {**config}
 
         with ExitStack() as stack:
-            stack.enter_context(patch("bot_setup.bot_setup.get_input_safe", side_effect=["cli", "n"]))
+            stack.enter_context(patch("bot_setup.bot_setup.get_input_safe", side_effect=list(_CLI_NO_GOLIVE)))
             stack.enter_context(patch("bot_setup.bot_setup.ask_slack_credentials_cli", return_value=with_webhook))
             mock_post = stack.enter_context(patch("bot_setup.bot_setup.post_message"))
             _enter_patches(stack, _standard_run_setup_patches())
@@ -252,7 +277,7 @@ class TestRunSetupCliGoLiveGuard:
             return ([{"type": "section", "text": {"type": "mrkdwn", "text": "s"}}], False)
 
         with ExitStack() as stack:
-            stack.enter_context(patch("bot_setup.bot_setup.get_input_safe", side_effect=["cli", "n"]))
+            stack.enter_context(patch("bot_setup.bot_setup.get_input_safe", side_effect=list(_CLI_NO_GOLIVE)))
             stack.enter_context(patch("bot_setup.bot_setup.ask_slack_credentials_cli", side_effect=track_credentials))
             stack.enter_context(patch("bot_setup.bot_setup.build_daily_summary", side_effect=track_summary))
             stack.enter_context(patch("bot_setup.bot_setup.post_message"))
@@ -280,7 +305,7 @@ class TestRunSetupCliGoLiveGuard:
         with_webhook = {**config}
 
         with ExitStack() as stack:
-            stack.enter_context(patch("bot_setup.bot_setup.get_input_safe", side_effect=["cli", "y"]))
+            stack.enter_context(patch("bot_setup.bot_setup.get_input_safe", side_effect=list(_CLI_GOLIVE)))
             stack.enter_context(patch("bot_setup.bot_setup.ask_slack_credentials_cli", return_value=with_webhook))
             mock_post = stack.enter_context(patch("bot_setup.bot_setup.post_message"))
             _enter_patches(stack, _standard_run_setup_patches())
@@ -295,7 +320,7 @@ class TestRunSetupCliGoLiveGuard:
         with_webhook = {**config}
 
         with ExitStack() as stack:
-            stack.enter_context(patch("bot_setup.bot_setup.get_input_safe", side_effect=["cli", "n"]))
+            stack.enter_context(patch("bot_setup.bot_setup.get_input_safe", side_effect=list(_CLI_NO_GOLIVE)))
             stack.enter_context(patch("bot_setup.bot_setup.ask_slack_credentials_cli", return_value=with_webhook))
             mock_post = stack.enter_context(patch("bot_setup.bot_setup.post_message"))
             _enter_patches(stack, _standard_run_setup_patches())
@@ -310,7 +335,7 @@ class TestRunSetupCliGoLiveGuard:
         no_webhook_config = {**config}
 
         with ExitStack() as stack:
-            stack.enter_context(patch("bot_setup.bot_setup.get_input_safe", side_effect=["cli", "n"]))
+            stack.enter_context(patch("bot_setup.bot_setup.get_input_safe", side_effect=list(_CLI_NO_GOLIVE)))
             stack.enter_context(patch("bot_setup.bot_setup.ask_slack_credentials_cli", return_value=no_webhook_config))
             stack.enter_context(patch("bot_setup.bot_setup.post_message"))
             _enter_patches(stack, _standard_run_setup_patches())
@@ -330,7 +355,7 @@ class TestRunSetupCliGoLiveGuard:
             save_calls.append(data.get("SLACK_WEBHOOK_URL", "__missing__"))
 
         with ExitStack() as stack:
-            stack.enter_context(patch("bot_setup.bot_setup.get_input_safe", side_effect=["cli", "n"]))
+            stack.enter_context(patch("bot_setup.bot_setup.get_input_safe", side_effect=list(_CLI_NO_GOLIVE)))
             stack.enter_context(patch("bot_setup.bot_setup.ask_slack_credentials_cli", return_value=with_webhook))
             stack.enter_context(patch("bot_setup.bot_setup.post_message"))
             _enter_patches(stack, [

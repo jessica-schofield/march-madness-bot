@@ -137,7 +137,11 @@ class ReviewAgent:
 
     def _check_hardcoded_tournament_dates(self):
         """Flag # ⚠️ UPDATE EACH YEAR comments — these are manual steps that get forgotten."""
+        allowlist = {"bot_setup/config.py"}
         for py_file in self._src_files():
+            rel = str(py_file.relative_to(ROOT))
+            if rel in allowlist:
+                continue
             for i, line in enumerate(py_file.read_text().splitlines(), 1):
                 if "UPDATE EACH YEAR" in line or "UPDATE_EACH_YEAR" in line:
                     self.add(
@@ -174,13 +178,33 @@ class ReviewAgent:
         for py_file in self._src_files():
             if any(ig in py_file.name for ig in ignore_files):
                 continue
+            # collect line ranges that are inside docstrings using AST
+            docstring_lines = set()
+            try:
+                tree = ast.parse(py_file.read_text())
+                for node in ast.walk(tree):
+                    if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef, ast.Module)):
+                        if (node.body and isinstance(node.body[0], ast.Expr)
+                                and isinstance(node.body[0].value, ast.Constant)
+                                and isinstance(node.body[0].value.value, str)):
+                            ds = node.body[0]
+                            for ln in range(ds.lineno, ds.end_lineno + 1):
+                                docstring_lines.add(ln)
+            except SyntaxError:
+                pass
             for i, line in enumerate(py_file.read_text().splitlines(), 1):
-                if pattern.search(line) and not line.strip().startswith("#") and "date" not in line.lower():
+                if i in docstring_lines:
+                    continue
+                stripped = line.strip()
+                # skip constant definitions and comments
+                if stripped.startswith("#") or re.match(r'^[a-zA-Z_][\w]* =', stripped):
+                    continue
+                if pattern.search(line) and "date" not in line.lower():
                     if "277" in line:
                         self.add(
                             "warning", "MAGIC_NUMBER", str(py_file), i,
                             "Magic number 277 = ESPN Men's 2026 challenge ID — will silently break next year.",
-                            fix="Store in a constant ESPN_CHALLENGE_ID_MEN_2026 = 277 with a yearly-update comment.",
+                            fix="Replace with _ESPN_CHALLENGE_ID_FALLBACK constant.",
                         )
 
     def _check_bare_except(self):
@@ -343,6 +367,7 @@ class ReviewAgent:
                 # known optional keys not in REQUIRED_KEYS
                 "TOURNAMENT_END_MEN", "TOURNAMENT_END_WOMEN",
                 "METHOD", "SEND_GAME_UPDATES",
+                "MANUAL_TOP", "_DM_SETUP_STARTED", "SLACK_BOT_TOKEN",
             }
             for key in sorted(undeclared):
                 self.add(

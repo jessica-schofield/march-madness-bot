@@ -3,15 +3,14 @@ import datetime
 import shutil
 from pathlib import Path
 
-CONFIG_FILE = Path(__file__).parent / "config.json"
-CONFIG_EXAMPLE_FILE = Path(__file__).parent / "config.example.json"
-SEEN_FILE = Path("seen_games.json")
-LAST_POST_FILE = Path("last_post.json")
-LAST_RANKINGS_FILE = Path("last_rankings.json")
-YEARLY_FLAG_FILE = Path("yearly_flag.json")
-YEARLY_REMINDER_FLAG_FILE = Path("yearly_reminder_flag.json")
-PLAYWRIGHT_STATE = Path("playwright_state.json")
-PLAYWRIGHT_HEADLESS = True
+CONFIG_FILE               = Path(__file__).parent / "config.json"
+CONFIG_EXAMPLE_FILE       = Path(__file__).parent / "example.config.json"
+SEEN_FILE                 = Path(__file__).parent / "seen_games.json"
+LAST_POST_FILE            = Path(__file__).parent / "last_post.json"
+YEARLY_FLAG_FILE          = Path(__file__).parent.parent / "yearly_flag.json"
+YEARLY_REMINDER_FLAG_FILE = Path(__file__).parent.parent / "yearly_reminder_flag.json"
+PLAYWRIGHT_STATE          = Path(__file__).parent.parent / "playwright_state.json"
+LAST_RANKINGS_FILE        = Path(__file__).parent.parent / "last_rankings.json"
 
 REQUIRED_KEYS = {
     "TOP_N": 3,
@@ -25,41 +24,32 @@ REQUIRED_KEYS = {
     "SLACK_WEBHOOK_URL": "",
     "SLACK_MANAGER_ID": "",
     "LIVE_COUNTER_URL": "",
-    "VERSION": "1.1.4",
+    "VERSION": "1.2.0",
 }
 
-# Keys that are allowed to be empty string — they are optional
 _OPTIONAL_KEYS = {"SLACK_MANAGER_ID", "LIVE_COUNTER_URL"}
 
-# ⚠️ UPDATE EACH YEAR
-_FALLBACK_TOURNAMENT_END_MEN = datetime.date(2026, 4, 7)
+_FALLBACK_TOURNAMENT_END_MEN   = datetime.date(2026, 4, 7)
 _FALLBACK_TOURNAMENT_END_WOMEN = datetime.date(2026, 4, 6)
 
-_MISSING = object()  # sentinel so callers can pass None or [] as explicit defaults
+_MISSING = object()
 
 
 def _seed_config_from_example():
-    """
-    Copy config.example.json → config.json on first run so new users
-    get a valid starting point without any manual steps.
-    """
     if CONFIG_EXAMPLE_FILE.exists():
         shutil.copy(CONFIG_EXAMPLE_FILE, CONFIG_FILE)
-        print(f"[INFO] Created config.json from config.example.json")
+        print("[INFO] Created config.json from config.example.json")
     else:
         CONFIG_FILE.write_text(json.dumps({}, indent=2))
-        print(f"[WARN] config.example.json not found — created empty config.json")
+        print("[WARN] config.example.json not found — created empty config.json")
 
 
 def load_json(path, default=_MISSING):
     if default is _MISSING:
         default = {}
     target = Path(path)
-
-    # Seed config.json from example on first run
     if not target.exists() and target.resolve() == CONFIG_FILE.resolve():
         _seed_config_from_example()
-
     if target.exists():
         try:
             with open(target) as f:
@@ -94,28 +84,21 @@ def needs_setup(cfg):
 
 
 def get_tournament_end(config, gender=None):
-    """
-    Return the tournament end date for the given gender, or the later of the two
-    if gender is None. Falls back to module-level defaults if not set in config.
-    """
-    men_raw = config.get("TOURNAMENT_END_MEN", "")
+    men_raw   = config.get("TOURNAMENT_END_MEN", "")
     women_raw = config.get("TOURNAMENT_END_WOMEN", "")
-
     try:
         men_end = datetime.date.fromisoformat(men_raw) if men_raw else _FALLBACK_TOURNAMENT_END_MEN
     except ValueError:
         men_end = _FALLBACK_TOURNAMENT_END_MEN
-
     try:
         women_end = datetime.date.fromisoformat(women_raw) if women_raw else _FALLBACK_TOURNAMENT_END_WOMEN
     except ValueError:
         women_end = _FALLBACK_TOURNAMENT_END_WOMEN
-
     if gender == "men":
         return men_end
     if gender == "women":
         return women_end
-    return max(men_end, women_end)  # bot stays live until both are done
+    return max(men_end, women_end)
 
 
 def fill_defaults(cfg):
@@ -123,3 +106,9 @@ def fill_defaults(cfg):
         if key not in cfg:
             cfg[key] = default
     return cfg
+
+
+def test_method_key_stripped_before_run_setup(self):
+    """METHOD must not be in the config passed to run_setup."""
+    passed_config = self._get_config_for_run_setup()
+    assert "METHOD" not in passed_config

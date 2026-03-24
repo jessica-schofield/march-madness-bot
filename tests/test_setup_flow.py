@@ -195,16 +195,13 @@ def test_date_questions_not_asked_twice():
 # ---------------------------------------------------------------------------
 
 def test_run_setup_does_not_open_browser_with_placeholder_urls():
-    """
-    run_setup must not call ensure_cbs_login when MEN_URL/WOMEN_URL are example.com placeholders.
-    The placeholder prompt will fire and replace them with empty strings (mocked),
-    so no browser should open.
-    """
     from bot_setup.bot_setup import run_setup
 
     config = {
         "METHOD": "cli",
         "TOP_N": 5,
+        "SLACK_WEBHOOK_URL": "https://hooks.slack.com/services/REAL",
+        "SLACK_MANAGER_ID": "U012ABC",
         "POOLS": [{"SOURCE": "cbs",
                    "MEN_URL": "https://example.com/men",
                    "WOMEN_URL": "https://example.com/women"}],
@@ -213,8 +210,13 @@ def test_run_setup_does_not_open_browser_with_placeholder_urls():
         "PLAYWRIGHT_STATE": "playwright_state.json",
     }
 
+    # method, TOP_N, MINUTES, POST_WEEKENDS, GAME_UPDATES, DAILY_SUMMARY,
+    # men_url prompt (blank→skip), women_url prompt (blank→skip),
+    # manual-top prompt (n), go-live (n), had_problem (n)
+    inputs = ["cli", "5", "0", "n", "y", "y", "", "", "n", "n", "n"]
+
     with patch("bot_setup.bot_setup.ensure_cbs_login") as mock_login, \
-         patch("bot_setup.bot_setup.get_input_safe", side_effect=["cli", "", "", "n"]), \
+         patch("bot_setup.bot_setup.get_input_safe", side_effect=inputs), \
          patch("bot_setup.bot_setup.ask_if_missing", side_effect=lambda c, k, *a, **kw: c), \
          patch("bot_setup.bot_setup.get_final_games", return_value=[]), \
          patch("bot_setup.bot_setup.save_json"), \

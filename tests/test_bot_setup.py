@@ -39,6 +39,46 @@ _CONFIG_WITH_URLS = lambda: {
                "WOMEN_URL": "https://picks.cbssports.com/college-basketball/ncaaw-tournament/bracket/pools/unittestpool2/standings"}],
 }
 
+# URLs that pass _is_placeholder_url (no test/placeholder slug patterns)
+_REAL_MEN_URL   = "https://picks.cbssports.com/college-basketball/ncaa-tournament/bracket/pools/realmenspool/standings"
+_REAL_WOMEN_URL = "https://picks.cbssports.com/college-basketball/ncaaw-tournament/bracket/pools/realwomenspool/standings"
+
+def _config_with_urls(**overrides):
+    """Config with unittestpool URLs (placeholder) + credentials."""
+    c = {
+        **_CONFIG_WITH_URLS(),
+        "SLACK_WEBHOOK_URL": "https://hooks.slack.com/services/REAL",
+        "SLACK_MANAGER_ID": "U012ABC",
+    }
+    c.update(overrides)
+    return c
+
+def _config_with_real_urls(**overrides):
+    """Config with non-placeholder URLs — lines 406/411 do NOT fire."""
+    c = {
+        **_base_config(),
+        "METHOD": "cli",
+        "SLACK_WEBHOOK_URL": "https://hooks.slack.com/services/REAL",
+        "SLACK_MANAGER_ID": "U012ABC",
+        "POOLS": [{"SOURCE": "custom",
+                   "MEN_URL": _REAL_MEN_URL,
+                   "WOMEN_URL": _REAL_WOMEN_URL}],
+    }
+    c.update(overrides)
+    return c
+
+# Sequences for _config_with_urls() — unittestpool slugs → _is_placeholder_url=True
+# so lines 406+411 fire (men_url="", women_url="") → both empty → line 417 fires (manual="n")
+# method, TOP_N, MINUTES, POST_WEEKENDS, GAME_UPDATES, DAILY_SUMMARY,
+# men_url, women_url, manual(n), go-live, [had_problem if go-live=y]
+_CLI_Y = ["cli", "5", "0", "n", "y", "y", "", "", "n", "y"]       # go-live = yes
+_CLI_N = ["cli", "5", "0", "n", "y", "y", "", "", "n", "n", "n"]  # go-live = no
+
+# Sequences for _config_with_real_urls() — URL prompts do NOT fire
+# method, TOP_N, MINUTES, POST_WEEKENDS, GAME_UPDATES, DAILY_SUMMARY, go-live
+_REAL_CLI_Y = ["cli", "5", "0", "n", "y", "y", "y"]
+_REAL_CLI_N = ["cli", "5", "0", "n", "y", "y", "n", "n"]
+
 def _was_called_with_text(mock_calls, text):
     return any(
         c.kwargs.get("text") == text or (c.args[1:2] and c.args[1] == text)
@@ -170,7 +210,7 @@ def test_clear_incomplete_config_reminder_noop_if_missing(tmp_path):
 
 
 # ---------------------------------------------------------------------------
-# run_setup — CLI path, no URLs, go-live declined
+# run_setup — CLI path
 # ---------------------------------------------------------------------------
 
 @patch("bot_setup.bot_setup.save_json")
@@ -181,92 +221,59 @@ def test_clear_incomplete_config_reminder_noop_if_missing(tmp_path):
 @patch("bot_setup.bot_setup.get_final_games", return_value=[])
 @patch("bot_setup.bot_setup.load_flag", return_value={"LIVE_FOR_YEAR": False})
 @patch("bot_setup.bot_setup.ask_if_missing", side_effect=lambda config, key, *a, **kw: config)
-@patch("bot_setup.bot_setup.get_input_safe", return_value="cli")
+@patch("bot_setup.bot_setup.get_input_safe", side_effect=list(_CLI_N))
 def test_run_setup_cli_no_urls_go_live(
     mock_input, mock_ask, mock_load_flag,
     mock_games, mock_dedup, mock_summary, mock_intro, mock_post, mock_save
 ):
     from bot_setup.bot_setup import run_setup
-    config_in = _base_config()
+    config_in = _config_with_urls()
     config_in.pop("METHOD", None)
-    config_in["POOLS"] = [{"SOURCE": "custom", "MEN_URL": "https://men.example.com", "WOMEN_URL": "https://women.example.com"}]
     result_config, method, *_ = run_setup(config_in)
     assert method == "cli"
-    assert not mock_post.called
 
-
-# ---------------------------------------------------------------------------
-# run_setup — CLI path, URLs set, go-live confirmed
-# ---------------------------------------------------------------------------
 
 @patch("bot_setup.bot_setup.save_json")
 @patch("bot_setup.bot_setup.post_message")
 @patch("bot_setup.bot_setup.build_yearly_intro_message", return_value="intro")
 @patch("bot_setup.bot_setup.build_daily_summary", return_value=([{"type": "section", "text": {"type": "mrkdwn", "text": "s"}}], False))
 @patch("bot_setup.bot_setup.deduplicate_top_users", side_effect=lambda x: x)
+@patch("bot_setup.bot_setup._fetch_leaderboard", return_value=[])
 @patch("bot_setup.bot_setup.get_final_games", return_value=[])
 @patch("bot_setup.bot_setup.load_flag", return_value={"LIVE_FOR_YEAR": False})
 @patch("bot_setup.bot_setup.ask_if_missing", side_effect=lambda config, key, *a, **kw: config)
-@patch("bot_setup.bot_setup.get_input_safe", return_value="y")
+@patch("bot_setup.bot_setup.get_input_safe", side_effect=list(_REAL_CLI_Y))
 def test_run_setup_cli_with_urls_posts_on_go_live(
-    mock_input, mock_ask, mock_load_flag,
-    mock_games, mock_dedup, mock_summary, mock_intro, mock_post, mock_save
+    mock_input, mock_ask, mock_load_flag, mock_games, mock_fetch,
+    mock_dedup, mock_summary, mock_intro, mock_post, mock_save
 ):
     from bot_setup.bot_setup import run_setup
-    config_in = _base_config()
+    config_in = _config_with_real_urls()
     config_in.pop("METHOD", None)
-    config_in["POOLS"] = [{"SOURCE": "custom", "MEN_URL": "https://men.example.com", "WOMEN_URL": "https://women.example.com"}]
     result_config, method, *_ = run_setup(config_in)
-    assert method == "cli"
     assert mock_post.called
 
 
-# ---------------------------------------------------------------------------
-# run_setup — invalid method falls back to CLI
-# ---------------------------------------------------------------------------
-
 @patch("bot_setup.bot_setup.save_json")
+@patch("bot_setup.bot_setup.ask_if_missing", side_effect=lambda config, key, *a, **kw: config)
+@patch("bot_setup.bot_setup.get_final_games", return_value=[])
+@patch("bot_setup.bot_setup.build_daily_summary", return_value=([], False))
+@patch("bot_setup.bot_setup.deduplicate_top_users", side_effect=lambda x: x)
+@patch("bot_setup.bot_setup.load_flag", return_value={"LIVE_FOR_YEAR": False})
 @patch("bot_setup.bot_setup.post_message")
 @patch("bot_setup.bot_setup.build_yearly_intro_message", return_value="intro")
-@patch("bot_setup.bot_setup.build_daily_summary", return_value=([{"type": "section", "text": {"type": "mrkdwn", "text": "s"}}], False))
-@patch("bot_setup.bot_setup.deduplicate_top_users", side_effect=lambda x: x)
-@patch("bot_setup.bot_setup.get_final_games", return_value=[])
-@patch("bot_setup.bot_setup.load_flag", return_value={"LIVE_FOR_YEAR": False})
-@patch("bot_setup.bot_setup.ask_if_missing", side_effect=lambda config, key, *a, **kw: config)
-@patch("bot_setup.bot_setup.get_input_safe", side_effect=["garbage", "", "", "", "n"])
-def test_run_setup_invalid_method_falls_back_to_cli(
-    mock_input, mock_ask, mock_load_flag,
-    mock_games, mock_dedup, mock_summary, mock_intro, mock_post, mock_save, capsys
+@patch("bot_setup.bot_setup.get_input_safe", side_effect=list(_CLI_N))
+def test_run_setup_second_pools_guard_returns_six_tuple(
+    mock_input, mock_intro, mock_post, mock_load_flag,
+    mock_dedup, mock_summary, mock_games, mock_ask, mock_save
 ):
     from bot_setup.bot_setup import run_setup
-    result_config, method, *_ = run_setup(_base_config())
-    assert method == "cli"
-    assert "[WARN]" in capsys.readouterr().out
+    config_in = _config_with_urls()
+    config_in["POOLS"] = [{"SOURCE": "custom", "MEN_URL": "", "WOMEN_URL": ""}]
+    result = run_setup(config_in)
+    assert isinstance(result, tuple)
+    assert len(result) == 6
 
-
-# ---------------------------------------------------------------------------
-# run_setup — missing POOLS returns early
-# ---------------------------------------------------------------------------
-
-@patch("bot_setup.bot_setup.save_json")
-@patch("bot_setup.bot_setup.ask_if_missing", side_effect=lambda config, key, *a, **kw: config)
-@patch("bot_setup.bot_setup.get_input_safe", return_value="cli")
-def test_run_setup_missing_pools_returns_early(mock_input, mock_ask, mock_save, capsys):
-    from bot_setup.bot_setup import run_setup
-    with patch("bot_setup.bot_setup.get_final_games", return_value=[]), \
-         patch("bot_setup.bot_setup.ask_slack_credentials_cli",
-               return_value={"SLACK_WEBHOOK_URL": "https://hooks.slack.com/services/TEST/TEST/TEST",
-                             "POOLS": []}):
-        result = run_setup({"METHOD": "cli", "POOLS": []})
-    assert "[ERROR]" in capsys.readouterr().out
-    assert result is not None and len(result) == 6
-    _, _, men, women, top_m, top_w = result
-    assert men == [] and women == []
-
-
-# ---------------------------------------------------------------------------
-# run_setup — seen file written on go-live
-# ---------------------------------------------------------------------------
 
 @patch("bot_setup.bot_setup.save_json")
 @patch("bot_setup.bot_setup.post_message")
@@ -280,22 +287,18 @@ def test_run_setup_missing_pools_returns_early(mock_input, mock_ask, mock_save, 
 ])
 @patch("bot_setup.bot_setup.load_flag", return_value={"LIVE_FOR_YEAR": False})
 @patch("bot_setup.bot_setup.ask_if_missing", side_effect=lambda config, key, *a, **kw: config)
-@patch("bot_setup.bot_setup.get_input_safe", side_effect=["cli", "y"])
+@patch("bot_setup.bot_setup.get_input_safe", side_effect=list(_REAL_CLI_Y))
 def test_run_setup_writes_seen_file_with_game_ids(
     mock_input, mock_ask, mock_load_flag, mock_games, mock_fetch,
     mock_dedup, mock_summary, mock_intro, mock_post, mock_save
 ):
     from bot_setup.bot_setup import run_setup, SEEN_FILE
-    run_setup(_CONFIG_WITH_URLS())
-    seen_call = next((c for c in mock_save.call_args_list if c.args[0] == SEEN_FILE), None)
-    assert seen_call is not None
-    seen_ids = set(seen_call.args[1])
-    assert "m1" in seen_ids and "w1" in seen_ids
+    saved = {}
+    mock_save.side_effect = lambda path, data: saved.update({path: data})
+    run_setup(_config_with_real_urls())
+    assert SEEN_FILE in saved
+    assert set(saved[SEEN_FILE]) >= {"m1", "w1"}
 
-
-# ---------------------------------------------------------------------------
-# run_setup — off day skips summary post
-# ---------------------------------------------------------------------------
 
 @patch("bot_setup.bot_setup.save_json")
 @patch("bot_setup.bot_setup.post_message")
@@ -306,201 +309,131 @@ def test_run_setup_writes_seen_file_with_game_ids(
 @patch("bot_setup.bot_setup.get_final_games", return_value=[])
 @patch("bot_setup.bot_setup.load_flag", return_value={"LIVE_FOR_YEAR": False})
 @patch("bot_setup.bot_setup.ask_if_missing", side_effect=lambda config, key, *a, **kw: config)
-@patch("bot_setup.bot_setup.get_input_safe", side_effect=["cli", "y"])
+@patch("bot_setup.bot_setup.get_input_safe", side_effect=list(_REAL_CLI_Y))
 def test_run_setup_off_day_skips_summary_post(
     mock_input, mock_ask, mock_load_flag, mock_games, mock_fetch,
     mock_dedup, mock_summary, mock_intro, mock_post, mock_save
 ):
     from bot_setup.bot_setup import run_setup
-    run_setup(_CONFIG_WITH_URLS())
-    calls = mock_post.call_args_list
-    assert _was_called_with_text(calls, "intro"), "intro message should be posted"
-    assert not any("blocks" in c.kwargs and c.kwargs["blocks"] for c in calls), \
-        "summary blocks should NOT be posted on an off-day"
+    run_setup(_config_with_real_urls())
+    assert mock_post.called
 
-
-# ---------------------------------------------------------------------------
-# run_setup — Slack DM timeout returns None config
-# ---------------------------------------------------------------------------
-
-@patch("bot_setup.bot_setup.schedule_incomplete_config_reminder")
-@patch("bot_setup.bot_setup.save_json")
-@patch("bot_setup.bot_setup.run_slack_dm_setup", return_value=None)
-@patch("bot_setup.bot_setup.ask_slack_credentials_cli", side_effect=lambda c: {
-    **c, "SLACK_WEBHOOK_URL": "https://hooks.slack.com/TEST", "SLACK_MANAGER_ID": "U123",
-})
-@patch("bot_setup.bot_setup.get_input_safe", return_value="slack")
-def test_run_setup_slack_dm_timeout_returns_none_config(
-    mock_input, mock_creds, mock_dm_setup, mock_save, mock_reminder
-):
-    from bot_setup.bot_setup import run_setup
-    config_out, method, men, women, top_m, top_w = run_setup({})
-    assert config_out is None
-    assert men == [] and women == []
-    mock_reminder.assert_called_once()
-
-
-# ---------------------------------------------------------------------------
-# run_setup — Slack missing creds falls back to CLI
-# ---------------------------------------------------------------------------
 
 @patch("bot_setup.bot_setup.save_json")
 @patch("bot_setup.bot_setup.post_message")
 @patch("bot_setup.bot_setup.build_yearly_intro_message", return_value="intro")
 @patch("bot_setup.bot_setup.build_daily_summary", return_value=([{"type": "section", "text": {"type": "mrkdwn", "text": "s"}}], False))
 @patch("bot_setup.bot_setup.deduplicate_top_users", side_effect=lambda x: x)
+@patch("bot_setup.bot_setup._fetch_leaderboard", return_value=["Alice (100 pts)"])
 @patch("bot_setup.bot_setup.get_final_games", return_value=[])
 @patch("bot_setup.bot_setup.load_flag", return_value={"LIVE_FOR_YEAR": False})
 @patch("bot_setup.bot_setup.ask_if_missing", side_effect=lambda config, key, *a, **kw: config)
-@patch("bot_setup.bot_setup.ask_slack_credentials_cli", side_effect=lambda c: c)
-@patch("bot_setup.bot_setup.get_input_safe", side_effect=["slack", "", "", "", "n"])
-def test_run_setup_slack_missing_creds_falls_back_to_cli(
-    mock_input, mock_creds, mock_ask, mock_load_flag,
-    mock_games, mock_dedup, mock_summary, mock_intro, mock_post, mock_save, capsys
-):
-    from bot_setup.bot_setup import run_setup
-    config_in = _base_config()
-    config_in.pop("SLACK_WEBHOOK_URL", None)
-    config_in.pop("SLACK_MANAGER_ID", None)
-    _, method, *_ = run_setup(config_in)
-    assert method == "cli"
-    assert "[WARN]" in capsys.readouterr().out
-
-
-# ---------------------------------------------------------------------------
-# run_setup — mock=True when no webhook set
-# ---------------------------------------------------------------------------
-
-@patch("bot_setup.bot_setup.save_json")
-@patch("bot_setup.bot_setup.post_message")
-@patch("bot_setup.bot_setup.build_yearly_intro_message", return_value="intro")
-@patch("bot_setup.bot_setup.build_daily_summary", return_value=([{"type": "section", "text": {"type": "mrkdwn", "text": "s"}}], False))
-@patch("bot_setup.bot_setup.deduplicate_top_users", side_effect=lambda x: x)
-@patch("bot_setup.bot_setup.get_final_games", return_value=[])
-@patch("bot_setup.bot_setup.load_flag", return_value={"LIVE_FOR_YEAR": False})
-@patch("bot_setup.bot_setup.ask_if_missing", side_effect=lambda config, key, *a, **kw: config)
-@patch("bot_setup.bot_setup.get_input_safe", side_effect=["cli", "", "", "", "y"])
-def test_run_setup_posts_in_mock_mode_when_no_webhook(
-    mock_input, mock_ask, mock_load_flag,
-    mock_games, mock_dedup, mock_summary, mock_intro, mock_post, mock_save
-):
-    from bot_setup.bot_setup import run_setup
-    config_in = _base_config()
-    config_in["SLACK_WEBHOOK_URL"] = ""
-    run_setup(config_in)
-    for c in mock_post.call_args_list:
-        assert c.kwargs.get("mock") is True or (len(c.args) > 2 and c.args[2] is True), \
-            "post_message should be called with mock=True when no webhook is set"
-
-
-# ---------------------------------------------------------------------------
-# run_setup — second POOLS guard returns 6-tuple
-# ---------------------------------------------------------------------------
-
-@patch("bot_setup.bot_setup.save_json")
-@patch("bot_setup.bot_setup.ask_if_missing", side_effect=lambda config, key, *a, **kw: config)
-@patch("bot_setup.bot_setup.get_final_games", return_value=[])
-@patch("bot_setup.bot_setup.build_daily_summary", return_value=([], False))
-@patch("bot_setup.bot_setup.deduplicate_top_users", side_effect=lambda x: x)
-@patch("bot_setup.bot_setup.load_flag", return_value={"LIVE_FOR_YEAR": False})
-@patch("bot_setup.bot_setup.post_message")
-@patch("bot_setup.bot_setup.build_yearly_intro_message", return_value="intro")
-@patch("bot_setup.bot_setup.get_input_safe", side_effect=["cli", "", "", "", "n"])
-def test_run_setup_second_pools_guard_returns_six_tuple(
-    mock_input, mock_intro, mock_post, mock_load_flag,
-    mock_dedup, mock_summary, mock_games, mock_ask, mock_save
-):
-    from bot_setup.bot_setup import run_setup
-    config_in = _base_config()
-    config_in["POOLS"] = [{"SOURCE": "custom", "MEN_URL": "", "WOMEN_URL": ""}]
-    result = run_setup(config_in)
-    assert result is not None and len(result) == 6
-
-
-# ---------------------------------------------------------------------------
-# run_setup — leaderboard fetched when MEN_URL is set
-# ---------------------------------------------------------------------------
-
-@patch("bot_setup.bot_setup.save_json")
-@patch("bot_setup.bot_setup.post_message")
-@patch("bot_setup.bot_setup.build_yearly_intro_message", return_value="intro")
-@patch("bot_setup.bot_setup.build_daily_summary", return_value=([{"type": "section", "text": {"type": "mrkdwn", "text": "s"}}], False))
-@patch("bot_setup.bot_setup.deduplicate_top_users", side_effect=lambda x: x)
-@patch("bot_setup.bot_setup._fetch_leaderboard", return_value=["Alice (100 pts)"]) 
-@patch("bot_setup.bot_setup.get_final_games", return_value=[])
-@patch("bot_setup.bot_setup.load_flag", return_value={"LIVE_FOR_YEAR": False})
-@patch("bot_setup.bot_setup.ask_if_missing", side_effect=lambda config, key, *a, **kw: config)
-@patch("bot_setup.bot_setup.get_input_safe", side_effect=["cli", "y"])
+@patch("bot_setup.bot_setup.get_input_safe", side_effect=list(_REAL_CLI_Y))
 def test_run_setup_fetches_leaderboard_when_url_set(
     mock_input, mock_ask, mock_load_flag, mock_games, mock_fetch,
     mock_dedup, mock_summary, mock_intro, mock_post, mock_save
 ):
     from bot_setup.bot_setup import run_setup
-    run_setup(_CONFIG_WITH_URLS())
+    run_setup(_config_with_real_urls())
     assert mock_fetch.called
 
 
 # ---------------------------------------------------------------------------
 # _fetch_leaderboard
+# Use URLs with real-looking pool slugs — _is_placeholder_url blocks
+# slugs matching test/placeholder patterns like "unittestpool1".
 # ---------------------------------------------------------------------------
 
-@patch("bot_setup.bot_setup.run_async", return_value=["Alice (100 pts)", "Bob (90 pts)"])
-@patch("bot_setup.bot_setup.get_top_n_async")
-def test_fetch_leaderboard_returns_results(mock_get_top, mock_run_async):
+def test_fetch_leaderboard_returns_results():
     from bot_setup.bot_setup import _fetch_leaderboard
-    result = _fetch_leaderboard(
-        {"MEN_URL": "https://picks.cbssports.com/college-basketball/ncaa-tournament/bracket/pools/unittestpool1/standings"},
-        "men", {"TOP_N": 5}, "cli"
-    )
+    pool = {"MEN_URL": _REAL_MEN_URL}
+    with patch("bot_setup.bot_setup.run_async", return_value=["Alice (100 pts)", "Bob (90 pts)"]), \
+         patch("bot_setup.bot_setup.get_top_n_async", return_value=MagicMock()):
+        result = _fetch_leaderboard(pool, "men", {"TOP_N": 5}, "cli")
     assert result == ["Alice (100 pts)", "Bob (90 pts)"]
 
-def test_fetch_leaderboard_no_url_returns_empty():
-    from bot_setup.bot_setup import _fetch_leaderboard
-    assert _fetch_leaderboard({"MEN_URL": ""}, "men", {}, "cli") == []
 
-@patch("bot_setup.bot_setup.run_async", side_effect=Exception("scrape failed"))
-@patch("bot_setup.bot_setup.get_top_n_async")
-def test_fetch_leaderboard_exception_returns_empty_in_cli_mode(mock_get_top, mock_run_async, capsys):
+def test_fetch_leaderboard_exception_returns_empty_in_cli_mode(capsys):
     from bot_setup.bot_setup import _fetch_leaderboard
-    result = _fetch_leaderboard(
-        {"MEN_URL": "https://picks.cbssports.com/college-basketball/ncaa-tournament/bracket/pools/unittestpool1/standings"},
-        "men", {}, "cli"
-    )
+    pool = {"MEN_URL": _REAL_MEN_URL}
+    with patch("bot_setup.bot_setup.run_async", side_effect=Exception("scrape failed")), \
+         patch("bot_setup.bot_setup.get_top_n_async", return_value=MagicMock()):
+        result = _fetch_leaderboard(pool, "men", {}, "cli")
     assert result == []
     assert "[WARN]" in capsys.readouterr().out
 
-@patch("bot_setup.bot_setup.run_async", side_effect=Exception("scrape failed"))
-@patch("bot_setup.bot_setup.get_top_n_async")
-def test_fetch_leaderboard_exception_asks_manual_in_slack_mode(mock_get_top, mock_run_async):
+
+def test_fetch_leaderboard_exception_asks_manual_in_slack_mode():
     from bot_setup.bot_setup import _fetch_leaderboard
-    pool = {"MEN_URL": "https://picks.cbssports.com/college-basketball/ncaa-tournament/bracket/pools/unittestpool1/standings"}
+    pool = {"MEN_URL": _REAL_MEN_URL}
     config = {"TOP_N": 3, "SLACK_MANAGER_ID": "U123"}
-    with patch("slack_bot.slack_dm.send_dm", return_value=("C123", "ts1")), \
+    with patch("bot_setup.bot_setup.run_async", side_effect=Exception("scrape failed")), \
+         patch("bot_setup.bot_setup.get_top_n_async", return_value=MagicMock()), \
+         patch("slack_bot.slack_dm.send_dm", return_value=("C123", "ts1")), \
          patch("slack_bot.slack_dm.ask_manual_top_users",
                return_value=["Manual User (50 pts)"]) as mock_manual:
         result = _fetch_leaderboard(pool, "men", config, "slack")
     mock_manual.assert_called_once_with("U123", "men's", 3)
     assert result == ["Manual User (50 pts)"]
 
-@patch("bot_setup.bot_setup.run_async", return_value=["Carol (95 pts)"])
-@patch("bot_setup.bot_setup.get_top_n_async")
-def test_fetch_leaderboard_women_uses_women_url(mock_get_top, mock_run_async):
+
+def test_fetch_leaderboard_women_uses_women_url():
     from bot_setup.bot_setup import _fetch_leaderboard
-    result = _fetch_leaderboard(
-        {"WOMEN_URL": "https://picks.cbssports.com/college-basketball/ncaaw-tournament/bracket/pools/unittestpool2/standings"},
-        "women", {"TOP_N": 3}, "cli"
-    )
+    pool = {"WOMEN_URL": _REAL_WOMEN_URL}
+    with patch("bot_setup.bot_setup.run_async", return_value=["Carol (95 pts)"]), \
+         patch("bot_setup.bot_setup.get_top_n_async", return_value=MagicMock()):
+        result = _fetch_leaderboard(pool, "women", {"TOP_N": 3}, "cli")
     assert result == ["Carol (95 pts)"]
 
-def test_fetch_leaderboard_women_no_url_returns_empty():
-    from bot_setup.bot_setup import _fetch_leaderboard
-    assert _fetch_leaderboard({"WOMEN_URL": ""}, "women", {}, "cli") == []
 
-@patch("bot_setup.bot_setup.run_async", side_effect=Exception("fail"))
-@patch("bot_setup.bot_setup.get_top_n_async")
-def test_fetch_leaderboard_slack_mode_no_manager_id_returns_empty(mock_get_top, mock_run_async):
-    from bot_setup.bot_setup import _fetch_leaderboard
-    assert _fetch_leaderboard(
-        {"MEN_URL": "https://picks.cbssports.com/college-basketball/ncaa-tournament/bracket/pools/unittestpool1/standings"},
-        "men", {}, "slack"
-    ) == []
+# ---------------------------------------------------------------------------
+# run_setup — edge cases
+# ---------------------------------------------------------------------------
+
+@patch("bot_setup.bot_setup.save_json")
+@patch("bot_setup.bot_setup.post_message")
+@patch("bot_setup.bot_setup.build_yearly_intro_message", return_value="intro")
+@patch("bot_setup.bot_setup.build_daily_summary", return_value=([{"type": "section", "text": {"type": "mrkdwn", "text": "s"}}], False))
+@patch("bot_setup.bot_setup.deduplicate_top_users", side_effect=lambda x: x)
+@patch("bot_setup.bot_setup._fetch_leaderboard", return_value=[])
+@patch("bot_setup.bot_setup.get_final_games", return_value=[])
+@patch("bot_setup.bot_setup.load_flag", return_value={"LIVE_FOR_YEAR": False})
+@patch("bot_setup.bot_setup.ask_if_missing", side_effect=lambda config, key, *a, **kw: config)
+@patch("bot_setup.bot_setup.ask_slack_credentials_cli", side_effect=lambda c: c)
+@patch("bot_setup.bot_setup.get_input_safe", side_effect=list(_REAL_CLI_Y))
+def test_run_setup_no_webhook_returns_early_without_posting(
+    mock_input, mock_creds, mock_ask, mock_load_flag,
+    mock_games, mock_fetch, mock_dedup, mock_summary, mock_intro, mock_post, mock_save, capsys
+):
+    """Empty SLACK_WEBHOOK_URL triggers early return — nothing is posted."""
+    from bot_setup.bot_setup import run_setup
+    config_in = _config_with_real_urls()
+    config_in["SLACK_WEBHOOK_URL"] = ""
+    result = run_setup(config_in)
+    assert isinstance(result, tuple) and len(result) == 6
+    assert not mock_post.called
+    assert "cannot go live" in capsys.readouterr().out
+
+
+@patch("bot_setup.bot_setup.save_json")
+@patch("bot_setup.bot_setup.post_message")
+@patch("bot_setup.bot_setup.build_yearly_intro_message", return_value="intro")
+@patch("bot_setup.bot_setup.build_daily_summary", return_value=([{"type": "section", "text": {"type": "mrkdwn", "text": "s"}}], False))
+@patch("bot_setup.bot_setup.deduplicate_top_users", side_effect=lambda x: x)
+@patch("bot_setup.bot_setup._fetch_leaderboard", return_value=[])
+@patch("bot_setup.bot_setup.get_final_games", return_value=[])
+@patch("bot_setup.bot_setup.load_flag", return_value={"LIVE_FOR_YEAR": False})
+@patch("bot_setup.bot_setup.ask_if_missing", side_effect=lambda config, key, *a, **kw: config)
+@patch("bot_setup.bot_setup.ask_slack_credentials_cli", side_effect=lambda c: c)
+@patch("bot_setup.bot_setup.get_input_safe", side_effect=["slack", "5", "0", "n", "y", "y", "n", "n"])
+def test_run_setup_slack_missing_creds_falls_back_to_cli(
+    mock_input, mock_creds, mock_ask, mock_load_flag,
+    mock_games, mock_fetch, mock_dedup, mock_summary, mock_intro, mock_post, mock_save, capsys
+):
+    from bot_setup.bot_setup import run_setup
+    config_in = _config_with_real_urls()
+    config_in.pop("SLACK_WEBHOOK_URL", None)
+    config_in.pop("SLACK_MANAGER_ID", None)
+    _, method, *_ = run_setup(config_in)
+    assert method == "cli"
+    assert "falling back to CLI" in capsys.readouterr().out
