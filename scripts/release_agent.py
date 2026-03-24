@@ -27,6 +27,10 @@ def run(cmd, capture=False):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument("--minor", action="store_true",
+                        help="Minor release: bump minor version and reset patch to 0")
+    parser.add_argument("--major", action="store_true",
+                        help="Major release: bump major version and reset minor+patch to 0")
     args = parser.parse_args()
 
     print("🏀 March Madness Bot — Release Agent")
@@ -67,7 +71,13 @@ def main():
         sys.exit(1)
     latest = versions[0]
     major, minor, patch = map(int, latest.split("."))
-    next_ver = f"{major}.{minor}.{patch + 1}"
+
+    if args.major:
+        next_ver = f"{major + 1}.0.0"
+    elif args.minor:
+        next_ver = f"{major}.{minor + 1}.0"
+    else:
+        next_ver = f"{major}.{minor}.{patch + 1}"
 
     print(f"  Current version : {latest}")
     print(f"  Next version    : {next_ver}\n")
