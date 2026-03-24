@@ -64,7 +64,7 @@ You'll be asked whether to set up via **Slack DMs** or **command line**. Either 
 4. Go-live confirmation
 
 Config is saved to `config.json` and reused on subsequent runs.
-
+grep -rn "xoxb\|SLACK_BOT_TOKEN\|write.*env\|\.env" bot_setup/ | grep -v "__pycache__"
 ---
 
 ## Running the Bot

@@ -1,0 +1,29 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Run Review Agent",
+      "type": "shell",
+      "command": "${workspaceFolder}/venv/bin/python3 scripts/review_agent.py",
+      "group": "test",
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared",
+        "clear": true
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Run Review Agent --fix",
+      "type": "shell",
+      "command": "${workspaceFolder}/venv/bin/python3 scripts/review_agent.py --fix",
+      "group": "test",
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared",
+        "clear": true
+      },
+      "problemMatcher": []
+    }
+  ]
+}

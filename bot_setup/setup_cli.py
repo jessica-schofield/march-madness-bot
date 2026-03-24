@@ -180,23 +180,31 @@ def ask_slack_credentials_cli(config):
         print("[WARN] No webhook URL set — bot will run in mock mode.")
 
     existing_token = os.environ.get("SLACK_BOT_TOKEN", "")
-    token = ask_with_help(
-        "🤖 Slack Bot Token — needed to send DMs and reminders. Starts with xoxb-",
-        SLACK_BOT_TOKEN_HELP,
-        default="(already set)" if existing_token else "",
-        config=config
-    )
-    if token and token != "(already set)":
+
+    while True:
+        token = ask_with_help(
+            "🤖 Slack Bot Token — needed to send DMs and reminders. Starts with xoxb-",
+            SLACK_BOT_TOKEN_HELP,
+            default="(already set)" if existing_token else "",
+            config=config
+        ).strip()
+
+        if not token or token == "(already set)":
+            print("[INFO] Using existing bot token from .env")
+            break
+        if not token.startswith("xoxb-"):
+            print("[WARN] That doesn't look like a bot token — it should start with xoxb-.")
+            print("       Find it at api.slack.com/apps → your app → OAuth & Permissions → Bot User OAuth Token.")
+            continue
+        if len(token) < 30:
+            print("[WARN] That token looks too short — make sure you copied the full token.")
+            continue
         env_path = Path(".env")
-        if not env_path.exists():
-            env_path.write_text("")
+        env_path.touch(exist_ok=True)
         set_key(str(env_path), "SLACK_BOT_TOKEN", token)
         os.environ["SLACK_BOT_TOKEN"] = token
         print("[INFO] Bot token saved to .env")
-    elif existing_token:
-        print("[INFO] Using existing bot token from .env")
-    else:
-        print("[WARN] No bot token set — Slack DMs and reminders won't work.")
+        break
 
     manager_id = ask_with_help(
         "Slack Manager User ID",

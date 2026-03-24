@@ -220,6 +220,40 @@ def get_current_version():
     return match.group(1) if match else "unknown"
 
 
+REQUIRED_EXAMPLE_CONFIG_KEYS = [
+    "METHOD",
+    "TOP_N",
+    "MINUTES_BETWEEN_MESSAGES",
+    "POST_WEEKENDS",
+    "SEND_GAME_UPDATES",
+    "SEND_DAILY_SUMMARY",
+    "SLACK_WEBHOOK_URL",
+    "SLACK_MANAGER_ID",
+    "MANUAL_TOP",
+    "LIVE_COUNTER_URL",
+    "POOLS",
+    "PLAYWRIGHT_HEADLESS",
+    "PLAYWRIGHT_STATE",
+    "TOURNAMENT_END_MEN",
+    "TOURNAMENT_END_WOMEN",
+]
+
+EXAMPLE_CONFIG = Path("bot_setup/example.config.json")
+
+
+def check_example_config():
+    print("\n[*] Checking example.config.json has all required keys...")
+    if not EXAMPLE_CONFIG.exists():
+        print(f"  [ERROR] {EXAMPLE_CONFIG} not found")
+        sys.exit(1)
+    data = json.loads(EXAMPLE_CONFIG.read_text())
+    missing = [k for k in REQUIRED_EXAMPLE_CONFIG_KEYS if k not in data]
+    if missing:
+        print(f"  [ERROR] example.config.json is missing keys: {missing}")
+        sys.exit(1)
+    print("  [OK] example.config.json contains all required keys")
+
+
 def main():
     parser = argparse.ArgumentParser(description="March Madness Bot release agent")
     parser.add_argument("part", choices=["patch", "minor", "major"],
@@ -246,6 +280,7 @@ def main():
 
     ensure_gitignore()
     untrack_sensitive_files()
+    check_example_config()
 
     if not args.dry_run:
         version = bump_version(part)

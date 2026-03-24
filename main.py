@@ -4,8 +4,10 @@
 # ------------------------------
 
 import sys
+import fcntl
 from asyncio import run as run_async
 from pathlib import Path
+import datetime
 
 from bot_setup.config import CONFIG_FILE, SEEN_FILE, LAST_POST_FILE, YEARLY_FLAG_FILE, load_json, save_json, needs_setup
 from bot_setup.bot_setup import run_setup, PLAYWRIGHT_STATE
@@ -16,6 +18,7 @@ from slack_bot.slack_utils import post_message
 from slack_bot.slack_dm import send_dm, ask_manual_top_users
 from status.yearly_setup_reminder import yearly_reminder, handle_stop, check_tournament_end, needs_config_reminder
 
+LOCK_FILE = Path(__file__).parent / "bot.lock"
 
 def run(config=None, yearly_flag=None):
     """Main bot logic — extracted for testability."""
@@ -28,7 +31,7 @@ def run(config=None, yearly_flag=None):
 
     if needs_setup(config) or not yearly_flag.get("LIVE_FOR_YEAR"):
         print("[INFO] Config incomplete — running setup...")
-        setup_config = {k: v for k, v in config.items() if k != "METHOD"}
+        setup_config = dict(config)   # was: {k: v for k, v in config.items() if k != "METHOD"}
         result = run_setup(setup_config)
         if result is None or result[0] is None:
             print("[INFO] Setup incomplete — exiting.")
@@ -73,7 +76,7 @@ def run(config=None, yearly_flag=None):
 
         mock = not bool(config.get("SLACK_WEBHOOK_URL"))
         if config.get("SEND_DAILY_SUMMARY", True):
-            blocks = build_daily_summary(
+            blocks, is_rest_day = build_daily_summary(
                 men_games, women_games, top_men, top_women,
                 men_url=pool.get("MEN_URL"),
                 women_url=pool.get("WOMEN_URL"),
@@ -95,10 +98,9 @@ def run(config=None, yearly_flag=None):
         last_post_dt = None
         if isinstance(last_post, dict) and last_post.get("time"):
             try:
-                import datetime
                 last_post_dt = datetime.datetime.fromisoformat(last_post["time"])
             except ValueError:
-                pass
+                pass  # remove the inline `import datetime` that was here
         if needs_config_reminder(config, last_post_dt):
             print("[REMIND] Config incomplete — please finish setup.")
 
@@ -113,4 +115,15 @@ if __name__ == "__main__":
         handle_stop(config)
         sys.exit(0)
 
-    run()
+    lock = open(LOCK_FILE, "w")
+    try:
+        fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError:
+        print("[INFO] Another instance is already running — exiting.")
+        sys.exit(0)
+
+    try:
+        run()
+    finally:
+        fcntl.flock(lock, fcntl.LOCK_UN)
+        lock.close()

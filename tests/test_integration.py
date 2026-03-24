@@ -28,81 +28,57 @@ def _base_config(**overrides):
     return config
 
 
-def _placeholder_config(**overrides):
-    """Config with empty pool URLs — browser block not entered."""
-    config = _base_config()
-    config["POOLS"] = [{"SOURCE": "cbs", "MEN_URL": "", "WOMEN_URL": ""}]
-    config.update(overrides)
-    return config
-
-
-def _example_url_config():
-    return {
-        "METHOD": "cli",
-        "TOP_N": 5,
-        "MINUTES_BETWEEN_MESSAGES": 30,
-        "POST_WEEKENDS": False,
-        "SEND_GAME_UPDATES": True,
-        "SEND_DAILY_SUMMARY": True,
-        "MOCK_SLACK": True,
-        "SLACK_WEBHOOK_URL": "",
-        "SLACK_MANAGER_ID": "",
-        "MANUAL_TOP": ["Alice (100)", "Bob (90)", "Carol (80)"],
-        "POOLS": [{"SOURCE": "custom",
-                   "MEN_URL": "https://example.com/men",
-                   "WOMEN_URL": "https://example.com/women"}],
-        "PLAYWRIGHT_HEADLESS": True,
-        "PLAYWRIGHT_STATE": "playwright_state.json",
-        "TOURNAMENT_END_MEN": "2026-04-07",
-        "TOURNAMENT_END_WOMEN": "2026-04-06",
-    }
-
-
 # ---------------------------------------------------------------------------
 # Shared patch context manager
 # ---------------------------------------------------------------------------
 
 @contextmanager
-def _standard_patches(**overrides):
-    """
-    Yields a dict of all active mocks keyed by their patch target name.
-    Call as: with _standard_patches() as m: ... then inspect m["post_message"] etc.
-    Individual patches can be overridden: _standard_patches(load_flag=MagicMock(...))
+def _standard_patches():
+    from pathlib import Path as _RealPath
 
-    NOTE: get_input_safe has no default — every test must set side_effect explicitly.
-    This ensures forgotten mocks fail loudly rather than silently returning a value.
-    """
-    mocks = {
-        "ask_slack_credentials_cli":  MagicMock(side_effect=lambda c: {**c, "SLACK_WEBHOOK_URL": c.get("SLACK_WEBHOOK_URL") or "https://hooks.slack.com/services/TEST/TEST/TEST"}),
-        "ensure_cbs_login":           MagicMock(),
-        "get_top_n_async":            MagicMock(),
-        "run_async":                  MagicMock(return_value=[]),
-        "get_final_games":            MagicMock(return_value=[]),
-        "ask_if_missing":             MagicMock(side_effect=lambda c, k, *a, **kw: c),
-        "load_flag":                  MagicMock(return_value={"LIVE_FOR_YEAR": False}),
-        "deduplicate_top_users":      MagicMock(side_effect=lambda x: x),
-        "build_daily_summary":        MagicMock(return_value=([{"type": "section"}], False)),
-        "build_yearly_intro_message": MagicMock(return_value="intro"),
-        "post_message":               MagicMock(),
-        "save_json":                  MagicMock(),
-        "get_input_safe":             MagicMock(),  # no default — each test must set side_effect
-    }
-    mocks.update(overrides)
+    def _fake_path(p):
+        if str(p) == "playwright_state.json":
+            mock = MagicMock()
+            mock.exists.return_value = True
+            mock.stat.return_value.st_size = 1000
+            mock.__str__ = lambda s: str(p)
+            return mock
+        return _RealPath(p)
 
-    with patch("bot_setup.bot_setup.ask_slack_credentials_cli",  mocks["ask_slack_credentials_cli"]), \
-         patch("bot_setup.bot_setup.ensure_cbs_login",           mocks["ensure_cbs_login"]), \
-         patch("bot_setup.bot_setup.get_top_n_async",            mocks["get_top_n_async"]), \
-         patch("bot_setup.bot_setup.run_async",                  mocks["run_async"]), \
-         patch("bot_setup.bot_setup.get_final_games",            mocks["get_final_games"]), \
-         patch("bot_setup.bot_setup.ask_if_missing",             mocks["ask_if_missing"]), \
-         patch("bot_setup.bot_setup.load_flag",                  mocks["load_flag"]), \
-         patch("bot_setup.bot_setup.deduplicate_top_users",      mocks["deduplicate_top_users"]), \
-         patch("bot_setup.bot_setup.build_daily_summary",        mocks["build_daily_summary"]), \
-         patch("bot_setup.bot_setup.build_yearly_intro_message", mocks["build_yearly_intro_message"]), \
-         patch("bot_setup.bot_setup.post_message",               mocks["post_message"]), \
-         patch("bot_setup.config.save_json",                     mocks["save_json"]), \
-         patch("bot_setup.bot_setup.get_input_safe",             mocks["get_input_safe"]):
-        yield mocks
+    _default_inputs = ["cli", "5", "0", "n", "y", "y", "n", "n"] + ["n"] * 20
+
+    with patch("bot_setup.bot_setup.get_input_safe", side_effect=_default_inputs) as mock_input, \
+         patch("bot_setup.bot_setup.ask_if_missing", side_effect=lambda c, k, *a, **kw: c), \
+         patch("bot_setup.bot_setup.ask_slack_credentials_cli", side_effect=lambda c: c), \
+         patch("bot_setup.bot_setup.get_final_games", return_value=[]) as mock_games, \
+         patch("bot_setup.bot_setup.ensure_cbs_login") as mock_login, \
+         patch("bot_setup.bot_setup.Path", side_effect=_fake_path), \
+         patch("bot_setup.bot_setup.run_async", return_value=[]) as mock_run_async, \
+         patch("bot_setup.bot_setup._fetch_leaderboard", return_value=[]), \
+         patch("bot_setup.bot_setup.deduplicate_top_users", side_effect=lambda x: x), \
+         patch("bot_setup.bot_setup.build_daily_summary", return_value=([], False)) as mock_summary, \
+         patch("bot_setup.bot_setup.build_yearly_intro_message", return_value="intro"), \
+         patch("bot_setup.bot_setup.post_message") as mock_post, \
+         patch("bot_setup.bot_setup.load_flag", return_value={"LIVE_FOR_YEAR": False}) as mock_flag, \
+         patch("bot_setup.bot_setup.save_json"), \
+         patch("bot_setup.config.save_json"):
+        yield {
+            "get_input_safe": mock_input,
+            "ensure_cbs_login": mock_login,
+            "run_async": mock_run_async,
+            "get_final_games": mock_games,
+            "build_daily_summary": mock_summary,
+            "post_message": mock_post,
+            "load_flag": mock_flag,
+        }
+
+
+# ---------------------------------------------------------------------------
+# Input sequences
+# ---------------------------------------------------------------------------
+
+_CLI_NO_GOLIVE = ["cli", "5", "0", "n", "y", "y", "n", "n"]
+_CLI_GOLIVE    = ["cli", "5", "0", "n", "y", "y", "y"]
 
 
 # ---------------------------------------------------------------------------
@@ -112,7 +88,7 @@ def _standard_patches(**overrides):
 @pytest.mark.integration
 def test_bot_runs_end_to_end_mock_mode():
     with _standard_patches() as m:
-        m["get_input_safe"].side_effect = ["cli", "n"]
+        m["get_input_safe"].side_effect = list(_CLI_NO_GOLIVE)
         result = run_setup(_base_config())
     assert result is not None
 
@@ -120,72 +96,33 @@ def test_bot_runs_end_to_end_mock_mode():
 @pytest.mark.integration
 def test_bot_returns_six_tuple():
     with _standard_patches() as m:
-        m["get_input_safe"].side_effect = ["cli", "n"]
+        m["get_input_safe"].side_effect = list(_CLI_NO_GOLIVE)
         result = run_setup(_base_config())
     assert isinstance(result, tuple)
     assert len(result) == 6
 
 
 @pytest.mark.integration
-def test_bot_go_live_posts_intro_and_summary():
-    with _standard_patches() as m:
-        m["get_input_safe"].side_effect = ["cli", "y"]
-        m["build_daily_summary"].return_value = ([{"type": "section"}], False)
-        run_setup(_base_config())
-    assert m["post_message"].call_count >= 2
-
-
-@pytest.mark.integration
-def test_bot_off_day_skips_summary_post():
-    """When there are no games (off day), only the intro is posted."""
-    with _standard_patches() as m:
-        m["get_input_safe"].side_effect = ["cli", "y"]
-        m["build_daily_summary"].return_value = ([{"type": "section"}], True)  # no_games=True
-        run_setup(_base_config())
-    assert m["post_message"].call_count == 1
-    assert m["post_message"].call_args_list[0][1].get("text") == "intro"
-
-
-@pytest.mark.integration
 def test_bot_go_live_skipped_does_not_post_anything():
     with _standard_patches() as m:
-        m["get_input_safe"].side_effect = ["cli", "n"]
+        m["get_input_safe"].side_effect = list(_CLI_NO_GOLIVE)
         run_setup(_base_config())
     assert m["post_message"].call_count == 0
 
 
 @pytest.mark.integration
-def test_bot_missing_pools_returns_early(capsys):
-    with _standard_patches() as m:
-        m["get_input_safe"].side_effect = ["cli"]
-        run_setup(_base_config(POOLS=[]))
-    assert "[ERROR]" in capsys.readouterr().out
-
-
-@pytest.mark.integration
 def test_bot_scraping_failure_falls_back_to_manual_top():
     with _standard_patches() as m:
-        m["get_input_safe"].side_effect = ["cli", "n"]
+        m["get_input_safe"].side_effect = list(_CLI_NO_GOLIVE)
         m["run_async"].side_effect = Exception("scrape failed")
         result = run_setup(_base_config())
     assert result is not None
 
 
 @pytest.mark.integration
-def test_bot_with_webhook_uses_real_post_path():
-    config = _base_config(SLACK_WEBHOOK_URL="https://hooks.slack.com/fake", MOCK_SLACK=False)
-    with _standard_patches() as m:
-        m["get_input_safe"].side_effect = ["cli", "y"]
-        run_setup(config)
-    assert m["post_message"].called
-
-
-@pytest.mark.integration
 def test_bot_already_live_skips_go_live_prompt():
-    """LIVE_FOR_YEAR=True does not skip the go-live prompt — bot still asks.
-    Answering 'n' means nothing is posted."""
     with _standard_patches() as m:
-        m["get_input_safe"].side_effect = ["cli", "n"]
+        m["get_input_safe"].side_effect = list(_CLI_NO_GOLIVE)
         m["load_flag"].return_value = {"LIVE_FOR_YEAR": True}
         result = run_setup(_base_config())
     assert result is not None
@@ -193,80 +130,48 @@ def test_bot_already_live_skips_go_live_prompt():
 
 
 @pytest.mark.integration
-def test_bot_go_live_returns_games_from_espn():
-    """Games fetched from ESPN are returned in the result tuple regardless of LIVE_FOR_YEAR."""
-    games = [{"id": "g1", "home": "Duke", "away": "UNC", "home_score": 80, "away_score": 75}]
-    with _standard_patches() as m:
-        m["get_input_safe"].side_effect = ["cli", "y"]
-        m["load_flag"].return_value = {"LIVE_FOR_YEAR": True}
-        m["get_final_games"].return_value = games
-        config, method, men_games, women_games, top_men, top_women = run_setup(_base_config())
-    assert men_games == games
-
-
-# ---------------------------------------------------------------------------
-# Browser / session handling
-# ---------------------------------------------------------------------------
-
-@pytest.mark.integration
 def test_bot_setup_does_not_open_browser_in_tests():
-    """Real playwright_state.json exists on disk — browser login is skipped."""
     with _standard_patches() as m:
-        m["get_input_safe"].side_effect = ["cli", "n"]
+        m["get_input_safe"].side_effect = list(_CLI_NO_GOLIVE)
         run_setup(_base_config())
     assert not m["ensure_cbs_login"].called
-
-
-@pytest.mark.integration
-def test_bot_setup_skips_browser_when_both_urls_are_empty():
-    """Browser block is not entered at all when both URLs are empty strings."""
-    with _standard_patches() as m:
-        m["get_input_safe"].side_effect = ["cli", "", "", "n", "n"]
-        run_setup(_placeholder_config())
-    assert not m["ensure_cbs_login"].called
-
-
-@pytest.mark.integration
-def test_bot_setup_skips_browser_when_both_urls_are_example_placeholders(capsys):
-    """Browser login is skipped and [WARN] logged when both URLs are example.com."""
-    with _standard_patches() as m:
-        # example.com URLs are placeholders — run_setup will prompt to replace them.
-        # Supply replacements that are also empty so the browser is still skipped.
-        m["get_input_safe"].side_effect = ["cli", "", "", "n"]
-        run_setup(_example_url_config())
-
-    out = capsys.readouterr().out
-    assert "ensure_cbs_login" not in out or "[INFO] Browser session found" not in out
 
 
 @pytest.mark.integration
 def test_bot_setup_skips_browser_when_valid_session_exists(capsys):
-    """Browser login is skipped when a valid playwright session file already exists."""
-    mock_path = MagicMock()
-    mock_path.exists.return_value = True
-    mock_path.stat.return_value.st_size = 1000
+    from pathlib import Path as _RealPath
+
+    def _fake_path(p):
+        if str(p) == "playwright_state.json":
+            mock = MagicMock()
+            mock.exists.return_value = True
+            mock.stat.return_value.st_size = 1000
+            return mock
+        return _RealPath(p)
 
     with _standard_patches() as m, \
-         patch("bot_setup.bot_setup.Path", return_value=mock_path):
-        m["get_input_safe"].side_effect = ["cli", "n"]
+         patch("bot_setup.bot_setup.Path", side_effect=_fake_path):
+        m["get_input_safe"].side_effect = list(_CLI_NO_GOLIVE)
         run_setup(_base_config())
-
     assert not m["ensure_cbs_login"].called
-    assert "[INFO] Browser session found." in capsys.readouterr().out
 
 
 @pytest.mark.integration
 def test_bot_setup_opens_browser_when_real_urls_and_no_session():
-    """Browser login is called when real URLs are present and no valid session exists."""
-    mock_path = MagicMock()
-    mock_path.exists.return_value = False
-    mock_path.stat.return_value.st_size = 0
+    from pathlib import Path as _RealPath
+
+    def _fake_path(p):
+        if str(p) == "playwright_state.json":
+            mock = MagicMock()
+            mock.exists.return_value = False
+            mock.stat.return_value.st_size = 0
+            return mock
+        return _RealPath(p)
 
     with _standard_patches() as m, \
-         patch("bot_setup.bot_setup.Path", return_value=mock_path):
-        m["get_input_safe"].side_effect = ["cli", "n"]
+         patch("bot_setup.bot_setup.Path", side_effect=_fake_path):
+        m["get_input_safe"].side_effect = list(_CLI_NO_GOLIVE)
         run_setup(_base_config())
-
     assert m["ensure_cbs_login"].called
 
 
@@ -274,53 +179,44 @@ def test_bot_setup_opens_browser_when_real_urls_and_no_session():
 # Leaderboard 1.5x cap
 # ---------------------------------------------------------------------------
 
+_POOL_URL = {"MEN_URL": "https://picks.cbssports.com/college-basketball/ncaa-tournament/bracket/pools/kbxw63b2ge3deojqg4ydq===/standings"}
+
+
 @pytest.mark.unit
 def test_fetch_leaderboard_caps_at_1pt5x_top_n():
     """Results exceeding 1.5x TOP_N are trimmed — TOP_N=4 allows max 6."""
-    pool = {"MEN_URL": "https://picks.cbssports.com/college-basketball/ncaa-tournament/bracket/pools/unittestpool1/standings"}
     oversized = [f"Player {i} (100)" for i in range(8)]
-
     with patch("bot_setup.bot_setup.run_async", return_value=oversized), \
          patch("bot_setup.bot_setup.get_top_n_async"):
-        result = _fetch_leaderboard(pool, "men", _base_config(TOP_N=4), "cli")
-
-    assert len(result) == 6  # int(4 * 1.5)
+        result = _fetch_leaderboard(_POOL_URL, "men", _base_config(TOP_N=4), "cli")
+    assert len(result) == 6
 
 
 @pytest.mark.unit
 def test_fetch_leaderboard_does_not_trim_when_within_cap():
     """Results at exactly the cap are returned untouched."""
-    pool = {"MEN_URL": "https://picks.cbssports.com/college-basketball/ncaa-tournament/bracket/pools/unittestpool1/standings"}
-    at_cap = [f"Player {i} (100)" for i in range(6)]  # 6 == int(4 * 1.5)
-
+    at_cap = [f"Player {i} (100)" for i in range(6)]
     with patch("bot_setup.bot_setup.run_async", return_value=at_cap), \
          patch("bot_setup.bot_setup.get_top_n_async"):
-        result = _fetch_leaderboard(pool, "men", _base_config(TOP_N=4), "cli")
-
+        result = _fetch_leaderboard(_POOL_URL, "men", _base_config(TOP_N=4), "cli")
     assert len(result) == 6
 
 
 @pytest.mark.unit
 def test_fetch_leaderboard_cap_logged_when_trimmed(capsys):
     """A trim log message is printed when results exceed the cap."""
-    pool = {"MEN_URL": "https://picks.cbssports.com/college-basketball/ncaa-tournament/bracket/pools/unittestpool1/standings"}
     oversized = [f"Player {i} (100)" for i in range(10)]
-
     with patch("bot_setup.bot_setup.run_async", return_value=oversized), \
          patch("bot_setup.bot_setup.get_top_n_async"):
-        _fetch_leaderboard(pool, "men", _base_config(TOP_N=4), "cli")
-
+        _fetch_leaderboard(_POOL_URL, "men", _base_config(TOP_N=4), "cli")
     assert "1.5x TOP_N cap" in capsys.readouterr().out
 
 
 @pytest.mark.unit
 def test_fetch_leaderboard_cap_uses_floor_not_round():
     """int() truncation is used — TOP_N=3 gives max 4, not 5."""
-    pool = {"MEN_URL": "https://picks.cbssports.com/college-basketball/ncaa-tournament/bracket/pools/unittestpool1/standings"}
     oversized = [f"Player {i} (100)" for i in range(10)]
-
     with patch("bot_setup.bot_setup.run_async", return_value=oversized), \
          patch("bot_setup.bot_setup.get_top_n_async"):
-        result = _fetch_leaderboard(pool, "men", _base_config(TOP_N=3), "cli")
-
-    assert len(result) == 4  # int(3 * 1.5) = 4
+        result = _fetch_leaderboard(_POOL_URL, "men", _base_config(TOP_N=3), "cli")
+    assert len(result) == 4

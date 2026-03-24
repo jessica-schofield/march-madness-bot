@@ -105,7 +105,7 @@ def _fetch_espn_group_api(group_id, cookies, challenge_id=_ESPN_CHALLENGE_ID_FAL
 def _detect_espn_challenge_id(url, cookies):
     """
     Look up the challenge ID for this ESPN TC year/gender from the challenge slug.
-    Falls back to 277 (Men's 2026) if it can't determine it.
+    Falls back to _ESPN_CHALLENGE_ID_FALLBACK (Men's 2026) if it can't determine it.
     """
     slug_match = re.search(
         r'(tournament-challenge-bracket(?:-women)?-\d{4})',
