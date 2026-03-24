@@ -34,13 +34,13 @@ def main():
 
     # 1. Tests must pass
     print("  Running pytest...")
-    run("python3 -m pytest --tb=short -q")
+    run(f"{sys.executable} -m pytest --tb=short -q")
     print("  ✅ All tests passed\n")
 
     # 2. No critical findings
     print("  Running review agent...")
     result = subprocess.run(
-        "python3 scripts/review_agent.py 2>&1",
+        f"{sys.executable} scripts/review_agent.py 2>&1",
         shell=True, capture_output=True, text=True
     )
     output = result.stdout + result.stderr
