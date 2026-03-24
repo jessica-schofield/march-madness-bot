@@ -292,6 +292,15 @@ class TestSetupTrigger:
             run(config, _live_flag())
         assert m["run_setup"].call_count == 1
 
+    def test_setup_runs_when_config_incomplete_even_if_live(self):
+        """needs_setup=True should trigger setup even when LIVE_FOR_YEAR=True."""
+        config = _base_config()
+        with _main_patches(config, _live_flag(),
+                           needs_setup=MagicMock(return_value=True),
+                           run_setup_return=(config, "cli", [], [], [], [])) as m:
+            run(config, _live_flag())
+        assert m["run_setup"].called
+
 
 # ---------------------------------------------------------------------------
 # Live path tests
@@ -325,7 +334,14 @@ class TestLivePath:
 
     def test_live_path_saves_seen_games(self):
         config = _base_config()
-        games = [{"id": "g1"}, {"id": "g2"}]
+        games = [
+            {"id": "g1", "gender": "men", "home": "Team A", "away": "Team B",
+             "home_score": "70", "away_score": "65", "home_seed": 1, "away_seed": 2,
+             "date": "2026-03-23T22:00Z"},
+            {"id": "g2", "gender": "women", "home": "Team C", "away": "Team D",
+             "home_score": "80", "away_score": "75", "home_seed": 1, "away_seed": 3,
+             "date": "2026-03-23T23:00Z"},
+        ]
         with _main_patches(config, _live_flag(),
                            get_final_games=MagicMock(return_value=games)) as m:
             run(config, _live_flag())
@@ -519,3 +535,36 @@ class TestSetupMethod:
 
         assert any("top" in p.lower() for p in captured_calls), \
             f"TOP_N prompt not seen after slack→cli fallback. Prompts: {captured_calls}"
+
+    def test_setup_runs_when_config_incomplete_even_if_live(self):
+        """needs_setup=True should trigger setup even when LIVE_FOR_YEAR=True."""
+        config = _base_config()
+        with _main_patches(config, _live_flag(),
+                           needs_setup=MagicMock(return_value=True),
+                           run_setup_return=(config, "cli", [], [], [], [])) as m:
+            run(config, _live_flag())
+        assert m["run_setup"].called
+
+
+def test_setup_skipped_when_live_and_config_complete():
+    """No setup when already live and config is complete."""
+    with _main_patches(
+        LIVE_CONFIG, _live_flag(),
+        needs_setup=MagicMock(return_value=False)
+    ) as m:
+        run(LIVE_CONFIG, _live_flag())
+    assert not m["run_setup"].called
+
+
+def test_yearly_reminder_not_sent_after_going_live_in_same_run():
+    """When setup completes and writes LIVE_FOR_YEAR, reminder should not fire."""
+    config = _base_config()
+    newly_live_flag = {"LIVE_FOR_YEAR": True}
+    with _main_patches(
+        config, {"LIVE_FOR_YEAR": False},
+        needs_setup=MagicMock(return_value=True),
+        run_setup_return=(config, "cli", [], [], [], []),
+        load_json=MagicMock(return_value=newly_live_flag)
+    ) as m:
+        run(config, {"LIVE_FOR_YEAR": False})
+    assert not m["yearly_reminder"].called

@@ -5,7 +5,7 @@ from pathlib import Path
 import urllib.request
 import urllib.parse
 
-from bot_setup.config import CONFIG_FILE, SEEN_FILE, YEARLY_FLAG_FILE, save_json
+from bot_setup.config import CONFIG_FILE, SEEN_FILE, YEARLY_FLAG_FILE, load_json, save_json, needs_setup
 from sources.espn import get_final_games
 from sources.cbs import ensure_cbs_login, get_top_n_async, deduplicate_top_users
 from slack_bot.messages import build_daily_summary, build_yearly_intro_message
@@ -104,8 +104,7 @@ def _is_placeholder_url(url):
     """Return True if the URL is a placeholder that hasn't been configured yet."""
     if not url:
         return True
-    from urllib.parse import urlparse
-    parsed = urlparse(url)
+    parsed = urllib.parse.urlparse(url)
     netloc = parsed.netloc.lower()
     path = parsed.path.lower()
 
@@ -668,8 +667,11 @@ def run_setup(existing_config=None):
         yearly_flag["LIVE_FOR_YEAR"] = True
         save_json(YEARLY_FLAG_FILE, yearly_flag)
 
-        all_games = (men_games or []) + (women_games or [])
-        save_json(SEEN_FILE, list(set(g["id"] for g in all_games)))
+        # Seed seen.json with games shown in the preview so they don't re-post as game updates
+        all_game_ids = list(set(g["id"] for g in (men_games or []) + (women_games or [])))
+        existing_seen = load_json(SEEN_FILE, [])
+        merged = list(set(existing_seen) | set(all_game_ids))
+        save_json(SEEN_FILE, merged)
 
         if method == "slack" and config.get("SLACK_MANAGER_ID"):
             from slack_bot.slack_dm import send_dm
@@ -694,36 +696,41 @@ def _ping_live_counter(config: dict) -> None:
     if not url:
         return
     try:
-        year = datetime.datetime.now().year
-        version = config.get("VERSION", "unknown")
-        params = urllib.parse.urlencode({"year": year, "version": version})
-        full_url = f"{url}?{params}"
-
-        with urllib.request.urlopen(full_url, timeout=10) as resp:
-            data = json.loads(resp.read())
-            print(
-                f"[INFO] 🎉 Bot live! {data.get('thisYear', '?')} bot(s) live in {year}, {data.get('total', '?')} all-time.")
-    except Exception:
-        pass
+        slack_user_id = config.get("SLACK_MANAGER_ID", "unknown")
+        full_url = (
+            f"{url}?year={datetime.date.today().year}"
+            f"&version={config.get('VERSION', 'unknown')}"
+            f"&slack_user_id={urllib.parse.quote(str(slack_user_id))}"
+        )
+        resp = urllib.request.urlopen(full_url, timeout=5)
+        data = json.loads(resp.read().decode())
+        this_year = data.get("thisYear", "?")
+        total = data.get("total", "?")
+        print(f"[INFO] 🏀 {this_year} bot(s) live this year — {total} total across all years.")
+    except Exception as e:
+        print(f"[WARN] Could not ping live counter: {e}")
 
 
 # Permanent developer Slack ID — used for problem reports regardless of who is running setup
 _DEV_SLACK_ID = "U03FHBPK0F7"
 
 def _send_setup_problem_email(description: str, slack_user_id: str = "") -> None:
-    """Send a setup problem report to the developer via Slack DM."""
-    try:
-        from slack_bot.slack_dm import send_dm
-        if slack_user_id:
-            contact_line = f"*Reported by:* <@{slack_user_id}> (`{slack_user_id}`)\n*To reply:* Open Slack and DM <@{slack_user_id}>\n\n"
-        else:
-            contact_line = "*Reported by:* unknown (no Slack ID provided)\n\n"
-        message = (
-            "🚨 *March Madness Bot — Setup Problem Reported*\n\n"
-            + contact_line
-            + f"*Description:*\n{description}"
-        )
-        send_dm(_DEV_SLACK_ID, message)
-        print("[INFO] Problem report sent to developer via Slack!")
-    except Exception as e:
-        print(f"[INFO] Could not send problem report: {e}")
+    from slack_bot.slack_dm import send_dm
+
+    _TEST_SENTINELS = {"TEST_SUITE", "test_suite"}
+    if slack_user_id in _TEST_SENTINELS:
+        print(f"[TEST] Suppressed setup problem report (sentinel={slack_user_id!r}): {description}")
+        return
+
+    if slack_user_id:
+        contact_line = f"*Reported by:* <@{slack_user_id}> (`{slack_user_id}`)\n*To reply:* Open Slack and DM <@{slack_user_id}>\n\n"
+    else:
+        contact_line = "*Reported by:* unknown (no Slack ID provided)\n\n"
+
+    message = (
+        "🚨 *March Madness Bot — Setup Problem Reported*\n\n"
+        + contact_line
+        + f"*Description:*\n{description}"
+    )
+    send_dm(_DEV_SLACK_ID, message)
+    print("[INFO] Problem report sent to developer via Slack!")

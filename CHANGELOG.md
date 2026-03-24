@@ -5,7 +5,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.2.0] - 2026-03-23
+## [2.1.0] - 2026-03-24
+
+### Added
+- `tests/test_events.py` — 12 tests for `slack_bot/events.py` (member join + DM reply handling)
+- `tests/test_slack_dm.py` — 8 tests for `slack_bot/slack_dm.py` (DM client, send, pending DM flag)
+- `tests/test_yearly_setup_reminder.py` — 17 tests for `status/yearly_setup_reminder.py`
+- `tests/test_event_server.py` — 5 tests for `slack_bot/event_server.py` Flask routes
+- `tests/test_yearly_setup_cron.py` — 5 tests for `status/yearly_setup_cron.py` cron entrypoint
+
+### Changed
+- `bot_setup/setup_cli.py`: moved `dotenv`/`os` imports to module level
+- `bot_setup/bot_setup.py`: removed redundant inline `urllib.parse` and `json` imports
+- `status/yearly_setup_reminder.py`: moved `save_json`, `check_championship_final`, and `post_message` to module-level imports
+- `scripts/review_agent.py`: added allowlists for intentionally-accepted NAIVE_DATETIME, IMPORT_INSIDE_FUNCTION, and NO_TEST_FILE patterns — review agent now reports 0 findings on a clean codebase
+
+### Fixed
+- `tests/test_input_exhaustion.py` `TestInputMethodRouting` — added missing `send_dm_blocks` and `poll_for_reply` mocks; 6 previously-failing tests now pass
+- `tests/test_espn.py` `TestAdvanceTournamentDates` — updated `save_json` patch targets after import move
+- `tests/test_setup_credentials.py` — updated `set_key` patch target after import move
+
+
 
 ### Changed
 - Various Bug Fixes

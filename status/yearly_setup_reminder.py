@@ -3,7 +3,9 @@ import re
 import datetime
 from pathlib import Path
 
-from bot_setup.config import YEARLY_FLAG_FILE, CONFIG_FILE
+from bot_setup.config import YEARLY_FLAG_FILE, CONFIG_FILE, save_json
+from sources.espn import check_championship_final
+from slack_bot.slack_utils import post_message
 
 ROOT = Path(__file__).parent.parent  # .../march-madness-bot
 
@@ -88,7 +90,6 @@ def _advance_tournament_dates(config):
             except ValueError:
                 print(f"[WARN] Could not parse {key}={raw!r} — skipping date advance")
     if changed:
-        from bot_setup.config import save_json
         save_json(CONFIG_FILE, config)
     return config
 
@@ -146,8 +147,6 @@ def check_tournament_end(config):
       - advances TOURNAMENT_END_MEN/WOMEN by one year in config.json
       - updates the yearly crontab entry to March 10 next year
     """
-    from sources.espn import check_championship_final
-
     flag = load_flag()
 
     if not flag.get("LIVE_FOR_YEAR"):
@@ -198,7 +197,6 @@ def check_tournament_end(config):
         "See you then! 🏀"
     )
 
-    from slack_bot.slack_utils import post_message
     post_message(config, text=wrap_up, mock=mock)
 
     flag["LIVE_FOR_YEAR"] = False
@@ -257,7 +255,6 @@ def yearly_reminder(config, manager_id):
         print(f"\n[REMINDER — MOCK SLACK]\n{reminder_text}")
         print(f"Next reminder: {next_morning.strftime('%A %B %d at 9:00am')}\n")
     else:
-        from slack_bot.slack_utils import post_message
         post_message(config, text=reminder_text)
         print(f"[INFO] Reminder sent. Next: {next_morning.strftime('%A %B %d at 9:00am')}.")
 
@@ -271,5 +268,4 @@ def handle_stop(config):
     if mock:
         print(f"[MOCK SLACK] {msg}")
     else:
-        from slack_bot.slack_utils import post_message
         post_message(config, text=msg)

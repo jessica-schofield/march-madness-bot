@@ -75,7 +75,7 @@ class TestAskSlackCredentialsCli:
             "https://hooks.slack.com/services/REAL",  # webhook
             valid_token,                               # bot token (passes both checks)
             "U012ABC",                                 # manager id
-        ]), patch.object(dotenv, "set_key", return_value=None) as mock_set_key, \
+        ]), patch("bot_setup.setup_cli.set_key", return_value=None) as mock_set_key, \
            patch("bot_setup.setup_cli.Path") as mock_path, \
            patch.dict(os.environ, {"SLACK_BOT_TOKEN": ""}, clear=False):
             mock_path.return_value.touch.return_value = None

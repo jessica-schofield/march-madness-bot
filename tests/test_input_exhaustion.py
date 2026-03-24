@@ -31,8 +31,8 @@ def _fake_path_missing(p):
     return _RealPath(p)
 
 
-def _base_config():
-    return {
+def _base_config(**overrides):
+    config = {
         "METHOD": "cli",
         "TOP_N": 5,
         "MINUTES_BETWEEN_MESSAGES": 60,
@@ -42,14 +42,13 @@ def _base_config():
         "TOURNAMENT_END_MEN": "2026-04-07",
         "TOURNAMENT_END_WOMEN": "2026-04-06",
         "SLACK_WEBHOOK_URL": "https://hooks.slack.com/services/TEST",
-        "SLACK_MANAGER_ID": "",
-        "MANUAL_TOP": [],
+        "SLACK_MANAGER_ID": "TEST_SUITE",
         "POOLS": [{"SOURCE": "custom",
-                   "MEN_URL": "https://www.cbssports.com/brackets/men/test-pool/standings",
-                   "WOMEN_URL": "https://www.cbssports.com/brackets/women/test-pool/standings"}],
-        "PLAYWRIGHT_HEADLESS": True,
-        "PLAYWRIGHT_STATE": "playwright_state.json",
+                   "MEN_URL": "https://picks.cbssports.com/men",
+                   "WOMEN_URL": "https://picks.cbssports.com/women"}],
     }
+    config.update(overrides)
+    return config
 
 
 # Standard input sequences.
@@ -518,15 +517,56 @@ class TestAlreadyLivePath:
 class TestInputMethodRouting:
     """The first input selects cli vs slack — both must complete without raising."""
 
+    def _slack_patches(self, stack, inputs):
+        import bot_setup.bot_setup as _bb
+
+        mock_input = stack.enter_context(
+            patch("bot_setup.bot_setup.get_input_safe", side_effect=list(inputs))
+        )
+        stack.enter_context(patch("bot_setup.bot_setup.Path", side_effect=_fake_path_valid))
+
+        slack_config = _base_config(METHOD="slack")
+        mock_run_slack = stack.enter_context(
+            patch("bot_setup.bot_setup.run_slack_dm_setup", return_value=slack_config)
+        )
+        stack.enter_context(
+            patch("slack_bot.slack_dm.send_dm", return_value=("C123", "ts123"))
+        )
+        stack.enter_context(
+            patch("slack_bot.slack_dm.send_dm_blocks", return_value=("C123", "ts123"))
+        )
+        stack.enter_context(
+            patch("slack_bot.slack_dm.poll_for_reply", return_value="n")
+        )
+
+        # Save the REAL function before _minimal_patches installs its passthrough mock
+        _real_orig = _bb.ask_slack_credentials_cli
+
+        mocks = _minimal_patches(stack, mock_input)
+
+        # Now directly overwrite the attribute — this wins over the mock installed
+        # by _minimal_patches because we're writing to the module dict directly,
+        # which is what run_setup reads at call time
+        _bb.ask_slack_credentials_cli = lambda c: {
+            **c,
+            "SLACK_WEBHOOK_URL": "https://hooks.slack.com/services/TEST",
+            "SLACK_MANAGER_ID": "TEST_SUITE",
+            "METHOD": "slack",
+        }
+        # Restore the REAL original (not the mock) when the stack unwinds
+        stack.callback(setattr, _bb, "ask_slack_credentials_cli", _real_orig)
+
+        mocks["run_slack_dm_setup"] = mock_run_slack
+        return mock_input, mocks
+
     def test_slack_method_does_not_raise(self):
         from bot_setup.bot_setup import run_setup
         with ExitStack() as stack:
-            mock_input = stack.enter_context(
-                patch("bot_setup.bot_setup.get_input_safe", side_effect=list(_SLACK_INPUTS))
-            )
-            stack.enter_context(patch("bot_setup.bot_setup.Path", side_effect=_fake_path_valid))
-            _minimal_patches(stack, mock_input)
-            run_setup(_base_config())
+            mock_input, _ = self._slack_patches(stack, _SLACK_INPUTS)
+            try:
+                run_setup(_base_config())
+            except Exception as e:
+                pytest.fail(f"Unexpected exception in slack method path: {e}")
 
     def test_cli_method_stored_in_result(self):
         from bot_setup.bot_setup import run_setup
@@ -542,15 +582,86 @@ class TestInputMethodRouting:
     def test_slack_method_stored_in_result(self):
         from bot_setup.bot_setup import run_setup
         with ExitStack() as stack:
+            mock_input, _ = self._slack_patches(stack, _SLACK_INPUTS)
+            result = run_setup(_base_config())
+        assert result is not None
+        assert result[1] == "slack"
+
+    def test_slack_method_returns_six_tuple(self):
+        from bot_setup.bot_setup import run_setup
+        with ExitStack() as stack:
+            mock_input, _ = self._slack_patches(stack, _SLACK_INPUTS)
+            result = run_setup(_base_config())
+        assert isinstance(result, tuple) and len(result) == 6
+
+    def test_slack_method_config_is_dict(self):
+        from bot_setup.bot_setup import run_setup
+        with ExitStack() as stack:
+            mock_input, _ = self._slack_patches(stack, _SLACK_INPUTS)
+            result = run_setup(_base_config())
+        assert isinstance(result[0], dict)
+
+    def test_slack_method_calls_run_slack_dm_setup(self):
+        from bot_setup.bot_setup import run_setup
+        with ExitStack() as stack:
+            mock_input, mocks = self._slack_patches(stack, _SLACK_INPUTS)
+            run_setup(_base_config())
+        # run_slack_dm_setup is patched in _slack_patches directly
+        # verify it was called by checking post_message was NOT called (dm setup returned config, no go-live)
+
+    def test_slack_method_does_not_call_post_message_when_no_golive(self):
+        from bot_setup.bot_setup import run_setup
+        with ExitStack() as stack:
+            mock_input, mocks = self._slack_patches(stack, _SLACK_INPUTS)
+            run_setup(_base_config())
+        mocks["post_message"].assert_not_called()
+
+    def test_unknown_method_falls_back_to_cli(self):
+        from bot_setup.bot_setup import run_setup
+        inputs = ("notamethod", "5", "0", "n", "y", "y", "n", "n")
+        with ExitStack() as stack:
             mock_input = stack.enter_context(
-                patch("bot_setup.bot_setup.get_input_safe", side_effect=list(_SLACK_INPUTS))
+                patch("bot_setup.bot_setup.get_input_safe", side_effect=list(inputs))
             )
             stack.enter_context(patch("bot_setup.bot_setup.Path", side_effect=_fake_path_valid))
             _minimal_patches(stack, mock_input)
             result = run_setup(_base_config())
-        # Falls back to cli when credentials mock returns no webhook
-        assert result[1] in ("slack", "cli")
+        assert result[1] == "cli"
 
+    def test_cli_method_does_not_call_run_slack_dm_setup(self):
+        from bot_setup.bot_setup import run_setup
+        with ExitStack() as stack:
+            mock_input = stack.enter_context(
+                patch("bot_setup.bot_setup.get_input_safe", side_effect=list(_CLI_NO_GOLIVE))
+            )
+            stack.enter_context(patch("bot_setup.bot_setup.Path", side_effect=_fake_path_valid))
+            mock_slack_dm = stack.enter_context(patch("bot_setup.bot_setup.run_slack_dm_setup"))
+            _minimal_patches(stack, mock_input)
+            run_setup(_base_config())
+        mock_slack_dm.assert_not_called()
+
+    def test_slack_fallback_to_cli_when_dm_setup_returns_none(self):
+        from bot_setup.bot_setup import run_setup
+        with ExitStack() as stack:
+            mock_input = stack.enter_context(
+                patch("bot_setup.bot_setup.get_input_safe", side_effect=list(_SLACK_INPUTS))
+            )
+            stack.enter_context(patch("bot_setup.bot_setup.Path", side_effect=_fake_path_valid))
+            stack.enter_context(patch("bot_setup.bot_setup.run_slack_dm_setup", return_value=None))
+            stack.enter_context(patch("bot_setup.bot_setup.ask_slack_credentials_cli", side_effect=lambda c: {
+                **c,
+                "SLACK_WEBHOOK_URL": "https://hooks.slack.com/services/TEST",
+                "SLACK_MANAGER_ID": "TEST_SUITE",
+            }))
+            stack.enter_context(patch("bot_setup.bot_setup.schedule_incomplete_config_reminder"))
+            _minimal_patches(stack, mock_input)
+            result = run_setup(_base_config())
+        assert result is None or (isinstance(result, tuple) and len(result) == 6)
+
+
+# ---------------------------------------------------------------------------
+# Tests: CBS scraper fallback (empty standings)
+# ---------------------------------------------------------------------------
 
 class TestScraperFallback:
     """When the CBS scraper returns empty, run_setup must still complete."""

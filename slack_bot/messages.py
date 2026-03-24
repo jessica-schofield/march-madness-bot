@@ -93,12 +93,12 @@ def _game_lines(games):
 
 def build_slack_message(game, top_men, top_women, men_url=None, women_url=None):
     """Build a Slack block message for a single game result."""
-    home_score = int(game['home_score'])
-    away_score = int(game['away_score'])
-    home_seed = game.get('home_seed')
-    away_seed = game.get('away_seed')
+    home_score = int(game.get('home_score', 0))
+    away_score = int(game.get('away_score', 0))
+    home_seed  = game.get('home_seed')
+    away_seed  = game.get('away_seed')
     upset = "⚡🔥" if is_upset(home_score, away_score, home_seed, away_seed) else ""
-    bracket_emoji = "🏆" if game['gender'] == 'men' else "👑"
+    bracket_emoji = "🏆" if game.get('gender') == 'men' else "👑"
 
     score_line = f"{bracket_emoji} *FINAL*: {game['away']} {away_score} - {home_score} {game['home']} {upset}"
 

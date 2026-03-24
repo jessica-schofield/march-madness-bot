@@ -592,7 +592,7 @@ class TestAdvanceTournamentDates:
             "TOURNAMENT_END_MEN": "2026-04-06",
             "TOURNAMENT_END_WOMEN": "2026-04-05",
         }
-        with patch("bot_setup.config.save_json"):
+        with patch("status.yearly_setup_reminder.save_json"):
             result = _advance_tournament_dates(config)
         assert result["TOURNAMENT_END_MEN"] == "2027-04-06"
         assert result["TOURNAMENT_END_WOMEN"] == "2027-04-05"
@@ -600,7 +600,7 @@ class TestAdvanceTournamentDates:
     def test_skips_malformed_date_without_raising(self):
         from status.yearly_setup_reminder import _advance_tournament_dates
         config = {"TOURNAMENT_END_MEN": "not-a-date", "TOURNAMENT_END_WOMEN": "2026-04-05"}
-        with patch("bot_setup.config.save_json"):
+        with patch("status.yearly_setup_reminder.save_json"):
             result = _advance_tournament_dates(config)
         assert result["TOURNAMENT_END_MEN"] == "not-a-date"
         assert result["TOURNAMENT_END_WOMEN"] == "2027-04-05"
@@ -608,7 +608,7 @@ class TestAdvanceTournamentDates:
     def test_does_nothing_when_keys_missing(self):
         from status.yearly_setup_reminder import _advance_tournament_dates
         config = {}
-        with patch("bot_setup.config.save_json") as mock_save:
+        with patch("status.yearly_setup_reminder.save_json") as mock_save:
             result = _advance_tournament_dates(config)
         mock_save.assert_not_called()
         assert result == {}
@@ -616,14 +616,14 @@ class TestAdvanceTournamentDates:
     def test_saves_config_when_changed(self):
         from status.yearly_setup_reminder import _advance_tournament_dates
         config = {"TOURNAMENT_END_MEN": "2026-04-06"}
-        with patch("bot_setup.config.save_json") as mock_save:
+        with patch("status.yearly_setup_reminder.save_json") as mock_save:
             _advance_tournament_dates(config)
         mock_save.assert_called_once()
 
     def test_advances_only_women_when_men_missing(self):
         from status.yearly_setup_reminder import _advance_tournament_dates
         config = {"TOURNAMENT_END_WOMEN": "2026-04-05"}
-        with patch("bot_setup.config.save_json"):
+        with patch("status.yearly_setup_reminder.save_json"):
             result = _advance_tournament_dates(config)
         assert result["TOURNAMENT_END_WOMEN"] == "2027-04-05"
         assert "TOURNAMENT_END_MEN" not in result
@@ -632,7 +632,7 @@ class TestAdvanceTournamentDates:
         """Return value must be the same dict that was passed in."""
         from status.yearly_setup_reminder import _advance_tournament_dates
         config = {"TOURNAMENT_END_MEN": "2026-04-06"}
-        with patch("bot_setup.config.save_json"):
+        with patch("status.yearly_setup_reminder.save_json"):
             result = _advance_tournament_dates(config)
         assert result is config
 

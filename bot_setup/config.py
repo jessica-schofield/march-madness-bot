@@ -65,22 +65,19 @@ def save_json(path, data):
         json.dump(data, f, indent=2, ensure_ascii=False)
 
 
-def needs_setup(cfg):
-    """Return True if any required config key is missing or has an empty/None value.
-    Treats 0 and False as valid values — only None and '' are considered unset.
-    Optional keys (SLACK_MANAGER_ID, LIVE_COUNTER_URL) may be empty strings.
-    """
-    for k in REQUIRED_KEYS:
-        if k not in cfg:
+def needs_setup(config):
+    def _is_missing(key, val):
+        if key in _OPTIONAL_KEYS:
+            return False
+        if val is None:
             return True
-        v = cfg[k]
-        if k in _OPTIONAL_KEYS:
-            continue
-        if v is None or v == "":
+        # Empty string or empty list is invalid, but 0 and False are valid
+        if isinstance(val, (str, list)) and len(val) == 0:
             return True
-        if k == "POOLS" and isinstance(v, list) and len(v) == 0:
-            return True
-    return False
+        return False
+
+    missing = [k for k in REQUIRED_KEYS if _is_missing(k, config.get(k))]
+    return bool(missing)
 
 
 def get_tournament_end(config, gender=None):
