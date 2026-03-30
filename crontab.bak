@@ -1,2 +1,3 @@
 */5 * * * * cd /Users/jess/march-madness-bot && /Users/jess/march-madness-bot/venv/bin/python main.py >> /Users/jess/march-madness-bot/cron.log 2>&1
 0 10 10 3 * /Users/jess/march-madness-bot/venv/bin/python /Users/jess/march-madness-bot/status/yearly_setup_cron.py >> /Users/jess/march-madness-bot/cron.log 2>&1
+0 8 * * 2 cd /Users/jess/march-madness-bot && /Users/jess/march-madness-bot/venv/bin/python3 scripts/release_agent.py >> /Users/jess/march-madness-bot/cron.log 2>&1

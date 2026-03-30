@@ -14,6 +14,7 @@ LIVE_CONFIG = {
     "SLACK_MANAGER_ID": "",
     "TOP_N": 5,
     "SEND_DAILY_SUMMARY": True,
+    "SUMMARY_HOUR": 0,
     "POOLS": [{"MEN_URL": "", "WOMEN_URL": ""}],
 }
 LIVE_FLAG = {"LIVE_FOR_YEAR": True}
@@ -47,7 +48,8 @@ def test_run_triggers_setup_when_needs_setup():
          patch("main.load_json", return_value={}), \
          patch("main.save_json"), \
          patch("main.yearly_reminder"), \
-         patch("main.needs_config_reminder", return_value=False):
+         patch("main.needs_config_reminder", return_value=False), \
+         patch("sys.stdin.isatty", return_value=True):
         run(config=LIVE_CONFIG, yearly_flag={"LIVE_FOR_YEAR": False})
     mock_setup.assert_called_once()
 
@@ -112,7 +114,8 @@ def test_run_calls_yearly_reminder_when_not_live():
          patch("main.load_json", return_value={}), \
          patch("main.save_json"), \
          patch("main.yearly_reminder", mock_reminder), \
-         patch("main.needs_config_reminder", return_value=False):
+         patch("main.needs_config_reminder", return_value=False), \
+         patch("sys.stdin.isatty", return_value=True):
         run(config=LIVE_CONFIG, yearly_flag={"LIVE_FOR_YEAR": False})
     mock_reminder.assert_called_once()
 
@@ -148,6 +151,7 @@ def _base_config(**overrides):
                    "MEN_URL": "https://www.cbssports.com/brackets/men/group/123",
                    "WOMEN_URL": "https://www.cbssports.com/brackets/women/group/456"}],
         "SEND_DAILY_SUMMARY": True,
+        "SUMMARY_HOUR": 0,
         "POST_WEEKENDS": True,
         "MINUTES_BETWEEN_MESSAGES": 0,
     }
@@ -178,7 +182,7 @@ def _main_patches(config, yearly_flag, needs_setup=None, build_summary=None,
 
     default_setup_result = (config, "cli", [], [], [], [])
     mocks = {
-        "load_json":             MagicMock(side_effect=[config, yearly_flag]),
+        "load_json":             MagicMock(side_effect=[{"men": [], "women": []}, {}, []]),
         "check_tournament_end":  MagicMock(),
         "needs_setup":           needs_setup,
         "run_setup":             MagicMock(return_value=run_setup_return or default_setup_result),
@@ -208,7 +212,8 @@ def _main_patches(config, yearly_flag, needs_setup=None, build_summary=None,
          patch("main.yearly_reminder",       mocks["yearly_reminder"]), \
          patch("main.needs_config_reminder", mocks["needs_config_reminder"]), \
          patch("main.save_json",             mocks["save_json"]), \
-         patch("main.run_async",             mocks["run_async"]):
+         patch("main.run_async",             mocks["run_async"]), \
+         patch("sys.stdin.isatty",           return_value=True):
         yield mocks
 
 

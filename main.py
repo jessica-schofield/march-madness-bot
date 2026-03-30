@@ -9,7 +9,7 @@ from asyncio import run as run_async
 from pathlib import Path
 import datetime
 
-from bot_setup.config import CONFIG_FILE, SEEN_FILE, LAST_POST_FILE, YEARLY_FLAG_FILE, load_json, save_json, needs_setup
+from bot_setup.config import CONFIG_FILE, SEEN_FILE, LAST_POST_FILE, YEARLY_FLAG_FILE, LAST_RANKINGS_FILE, load_json, save_json, needs_setup, missing_setup_keys
 from bot_setup.bot_setup import run_setup, PLAYWRIGHT_STATE
 from sources.espn import get_final_games
 from sources.cbs import ensure_cbs_login, get_top_n_async, deduplicate_top_users
@@ -33,6 +33,16 @@ def run(config=None, yearly_flag=None):
     already_live = yearly_flag.get("LIVE_FOR_YEAR", False)
 
     if needs_setup(config) or not already_live:
+        import sys
+        if not sys.stdin.isatty():
+            missing = missing_setup_keys(config)
+            if missing:
+                print(f"[ERROR] Bot config is incomplete — cannot run setup non-interactively.")
+                print(f"[ERROR] Missing or empty fields: {', '.join(missing)}")
+            else:
+                print("[ERROR] LIVE_FOR_YEAR not set — cannot run yearly setup non-interactively.")
+            print("[ERROR] Run 'python main.py' in a terminal to complete setup.")
+            return
         print("[INFO] Config incomplete — running setup...")
         setup_config = dict(config)
         result = run_setup(setup_config)
@@ -78,12 +88,17 @@ def run(config=None, yearly_flag=None):
         top_men = deduplicate_top_users(top_men)
         top_women = deduplicate_top_users(top_women)
 
+        _last = load_json(LAST_RANKINGS_FILE, {"men": [], "women": []})
+        display_men = top_men or _last.get("men", [])
+        display_women = top_women or _last.get("women", [])
+
         mock = not bool(config.get("SLACK_WEBHOOK_URL"))
         if config.get("SEND_DAILY_SUMMARY", True):
             last_post = load_json(LAST_POST_FILE, {})
             last_post_date = last_post.get("date")
             today_str = datetime.date.today().isoformat()
-            if last_post_date != today_str:
+            summary_hour = config.get("SUMMARY_HOUR", 9)
+            if last_post_date != today_str and datetime.datetime.now().hour >= summary_hour:
                 blocks, is_rest_day = build_daily_summary(
                     men_games, women_games, top_men, top_women,
                     men_url=pool.get("MEN_URL"),
@@ -92,8 +107,10 @@ def run(config=None, yearly_flag=None):
                 )
                 post_message(config, blocks=blocks, mock=mock)
                 save_json(LAST_POST_FILE, {"date": today_str, "time": datetime.datetime.now().isoformat()})
-            else:
+            elif last_post_date == today_str:
                 print(f"[INFO] Daily summary already posted today ({today_str}) — skipping.")
+            else:
+                print(f"[INFO] Daily summary will post after {summary_hour}:00 — skipping for now.")
 
         if config.get("SEND_GAME_UPDATES", True):
             seen = load_json(SEEN_FILE, [])
@@ -102,7 +119,7 @@ def run(config=None, yearly_flag=None):
             unseen = [g for g in (men_games + women_games) if g["id"] not in seen]
             for game in unseen:
                 blocks = build_slack_message(
-                    game, top_men, top_women,
+                    game, display_men, display_women,
                     men_url=pool.get("MEN_URL"),
                     women_url=pool.get("WOMEN_URL")
                 )
