@@ -138,10 +138,14 @@ def build_daily_summary(men_games, women_games, top_men, top_women, men_url=None
             "women": top_women
         })
 
+    # Fall back to last known rankings when live data is unavailable (e.g. rest days)
+    display_men = top_men or last_rankings.get("men", [])
+    display_women = top_women or last_rankings.get("women", [])
+
     yesterday = (datetime.datetime.now() - datetime.timedelta(days=1)).strftime("%A, %B %-d")
 
-    men_count = len(top_men) if top_men else (top_n or "?")
-    women_count = len(top_women) if top_women else (top_n or "?")
+    men_count = len(display_men) if display_men else (top_n or "?")
+    women_count = len(display_women) if display_women else (top_n or "?")
 
     men_header = f"*<{men_url}|🥇 Men's Top {men_count}>*" if men_url else f"*🥇 Men's Top {men_count}*"
     women_header = f"*<{women_url}|👑 Women's Top {women_count}>*" if women_url else f"*👑 Women's Top {women_count}*"
@@ -154,10 +158,10 @@ def build_daily_summary(men_games, women_games, top_men, top_women, men_url=None
         {"type": "divider"},
         {"type": "section", "text": {"type": "mrkdwn", "text": f"*👑 Women's Games:*\n{_game_lines(women_games)}"}},
         {"type": "divider"},
-        {"type": "section", "text": {"type": "mrkdwn", "text": f"{men_header}\n{format_leaderboard(top_men)}"}},
+        {"type": "section", "text": {"type": "mrkdwn", "text": f"{men_header}\n{format_leaderboard(display_men)}"}},
         {"type": "section", "text": {"type": "mrkdwn", "text": f"*Men's Movers:*\n{men_riser or '_No changes_'}"}},
         {"type": "divider"},
-        {"type": "section", "text": {"type": "mrkdwn", "text": f"{women_header}\n{format_leaderboard(top_women)}"}},
+        {"type": "section", "text": {"type": "mrkdwn", "text": f"{women_header}\n{format_leaderboard(display_women)}"}},
         {"type": "section", "text": {"type": "mrkdwn", "text": f"*Women's Movers:*\n{women_riser or '_No changes_'}"}},
     ], no_games  # fix: return no_games flag so caller can decide whether to post
 

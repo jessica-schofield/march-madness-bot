@@ -65,19 +65,24 @@ def save_json(path, data):
         json.dump(data, f, indent=2, ensure_ascii=False)
 
 
-def needs_setup(config):
-    def _is_missing(key, val):
-        if key in _OPTIONAL_KEYS:
-            return False
-        if val is None:
-            return True
-        # Empty string or empty list is invalid, but 0 and False are valid
-        if isinstance(val, (str, list)) and len(val) == 0:
-            return True
+def _is_missing(key, val):
+    if key in _OPTIONAL_KEYS:
         return False
+    if val is None:
+        return True
+    # Empty string or empty list is invalid, but 0 and False are valid
+    if isinstance(val, (str, list)) and len(val) == 0:
+        return True
+    return False
 
-    missing = [k for k in REQUIRED_KEYS if _is_missing(k, config.get(k))]
-    return bool(missing)
+
+def missing_setup_keys(config):
+    """Return list of required keys that are missing or empty."""
+    return [k for k in REQUIRED_KEYS if _is_missing(k, config.get(k))]
+
+
+def needs_setup(config):
+    return bool(missing_setup_keys(config))
 
 
 def get_tournament_end(config, gender=None):
