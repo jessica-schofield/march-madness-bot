@@ -52,12 +52,30 @@ def run(config=None, yearly_flag=None):
         config, _, men_games, women_games, top_men, top_women = result
         yearly_flag = load_json(YEARLY_FLAG_FILE, {})  # reload after setup writes LIVE_FOR_YEAR
     else:
-        men_games = get_final_games("men")
-        women_games = get_final_games("women")
+        # Daily recap is always based on yesterday's games.
+        men_games = get_final_games("men", days_ago=1)
+        women_games = get_final_games("women", days_ago=1)
+
+        # Live game updates should include today's finals; keep yesterday as a fallback
+        # to avoid missing late-night finals around timezone boundaries.
+        men_games_updates = get_final_games("men", days_ago=0) + men_games
+        women_games_updates = get_final_games("women", days_ago=0) + women_games
 
         top_men, top_women = [], []
         pool = config.get("POOLS", [{}])[0]
         manager_id = config.get("SLACK_MANAGER_ID", "")
+
+        if not pool.get("MEN_URL") and not pool.get("WOMEN_URL"):
+            warning = (
+                "No MEN_URL or WOMEN_URL configured — leaderboard scraping is disabled, "
+                "so movers will show no changes unless cached rankings exist."
+            )
+            print(f"[WARN] {warning}")
+            if manager_id:
+                try:
+                    send_dm(manager_id, f"⚠️ {warning}")
+                except Exception as e:
+                    print(f"[WARN] Failed to DM manager about missing pool URLs: {e}")
 
         if pool.get("MEN_URL") or pool.get("WOMEN_URL"):
             try:
@@ -116,7 +134,16 @@ def run(config=None, yearly_flag=None):
             seen = load_json(SEEN_FILE, [])
             if not isinstance(seen, list):
                 seen = []
-            unseen = [g for g in (men_games + women_games) if g["id"] not in seen]
+            all_update_games = []
+            seen_ids = set()
+            for g in (men_games_updates + women_games_updates):
+                gid = g.get("id")
+                if gid in seen_ids:
+                    continue
+                seen_ids.add(gid)
+                all_update_games.append(g)
+
+            unseen = [g for g in all_update_games if g["id"] not in seen]
             for game in unseen:
                 blocks = build_slack_message(
                     game, display_men, display_women,

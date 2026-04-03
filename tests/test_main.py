@@ -317,7 +317,7 @@ class TestLivePath:
         config = _base_config()
         with _main_patches(config, _live_flag()) as m:
             run(config, _live_flag())
-        assert m["get_final_games"].call_count == 2
+        assert m["get_final_games"].call_count == 4
 
     def test_live_path_posts_daily_summary(self):
         config = _base_config()
@@ -357,6 +357,23 @@ class TestLivePath:
         with _main_patches(config, _live_flag()) as m:
             run(config, _live_flag())
         assert not m["ensure_cbs_login"].called
+
+    def test_live_path_warns_and_dms_when_no_pool_urls(self):
+        config = _base_config(
+            SLACK_MANAGER_ID="U012ABC",
+            POOLS=[{"SOURCE": "cbs", "MEN_URL": "", "WOMEN_URL": ""}],
+        )
+        with _main_patches(config, _live_flag()) as m, \
+             patch("main.send_dm") as mock_send_dm, \
+             patch("builtins.print") as mock_print:
+            run(config, _live_flag())
+
+        assert not m["ensure_cbs_login"].called
+        assert mock_send_dm.called
+        assert any(
+            "No MEN_URL or WOMEN_URL configured" in str(call)
+            for call in mock_print.call_args_list
+        )
 
     def test_live_path_calls_yearly_reminder_when_not_live(self):
         config = _base_config()
