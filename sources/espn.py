@@ -2,17 +2,17 @@ import requests
 import datetime
 
 
-def espn_url(gender):
-    """Build ESPN scoreboard URL for yesterday's date."""
-    yesterday = (datetime.datetime.now() - datetime.timedelta(days=1)).strftime("%Y%m%d")
+def espn_url(gender, days_ago=1):
+    """Build ESPN scoreboard URL for a date offset (default: yesterday)."""
+    target_day = (datetime.datetime.now() - datetime.timedelta(days=days_ago)).strftime("%Y%m%d")
     if gender == "men":
-        return f"https://site.api.espn.com/apis/site/v2/sports/basketball/mens-college-basketball/scoreboard?groups=100&limit=50&dates={yesterday}"
-    return f"https://site.api.espn.com/apis/site/v2/sports/basketball/womens-college-basketball/scoreboard?groups=100&limit=50&dates={yesterday}"
+        return f"https://site.api.espn.com/apis/site/v2/sports/basketball/mens-college-basketball/scoreboard?groups=100&limit=50&dates={target_day}"
+    return f"https://site.api.espn.com/apis/site/v2/sports/basketball/womens-college-basketball/scoreboard?groups=100&limit=50&dates={target_day}"
 
 
-def get_final_games(gender):
-    """Fetch yesterday's final games from ESPN."""
-    url = espn_url(gender)
+def get_final_games(gender, days_ago=1):
+    """Fetch final games from ESPN for a date offset (default: yesterday)."""
+    url = espn_url(gender, days_ago=days_ago)
     games = []
     try:
         resp = requests.get(url, timeout=10)
